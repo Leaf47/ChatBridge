@@ -6,6 +6,7 @@ JA2EN — ゲーム内日本語→英語翻訳ツール
 """
 
 import sys
+import signal
 import threading
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer, Qt, Slot
@@ -77,6 +78,16 @@ class JA2ENApp:
         print(f"翻訳エンジン: {self._translator.name()}")
         print(f"ホットキー: {self._config.get('hotkey_translate', 'ctrl+j')}")
         print("システムトレイにアイコンが表示されます。")
+        print("終了: トレイアイコン右クリック → 終了、または Ctrl+C")
+
+        # Ctrl+C (SIGINT) で終了できるようにする
+        signal.signal(signal.SIGINT, lambda *args: self._quit())
+
+        # Qt イベントループは C++ で動くため、Python のシグナルが届かない。
+        # 定期的に Python に制御を戻すタイマーを追加する。
+        self._signal_timer = QTimer()
+        self._signal_timer.timeout.connect(lambda: None)  # Python に制御を戻すだけ
+        self._signal_timer.start(200)  # 200msごと
 
         # ホットキーリスナーを開始
         self._hotkey_manager.start()
@@ -181,8 +192,12 @@ class JA2ENApp:
 
 def main():
     """エントリーポイント"""
-    app = JA2ENApp()
-    sys.exit(app.run())
+    try:
+        app = JA2ENApp()
+        sys.exit(app.run())
+    except KeyboardInterrupt:
+        print("\nJA2EN を終了しました。")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
