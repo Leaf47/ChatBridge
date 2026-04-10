@@ -68,7 +68,8 @@ class JA2ENApp:
         """設定に基づいて翻訳エンジンを作成する"""
         engine_name = self._config.get("translator", "mymemory")
         api_keys = self._config.get("api_keys", {})
-        return create_translator(engine_name, api_keys)
+        mymemory_email = self._config.get("mymemory_email", "")
+        return create_translator(engine_name, api_keys, mymemory_email=mymemory_email)
 
     def run(self) -> int:
         """アプリケーションを開始する"""

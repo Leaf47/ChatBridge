@@ -29,7 +29,10 @@ DEFAULT_CONFIG = {
     # 確認なしで即ペーストするか
     "auto_paste": False,
 
-    # APIキー
+    # MyMemory メールアドレス（設定すると1日5,000文字→50,000文字に増加）
+    "mymemory_email": "",
+
+    # APIキー（将来の拡張用）
     "api_keys": {
         "deepl": "",
         "google": "",

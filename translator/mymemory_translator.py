@@ -2,7 +2,9 @@
 MyMemory 翻訳エンジン
 
 無料で使える翻訳API。APIキー不要。
-制限: 1日1000リクエスト（ゲームチャットなら十分）
+制限:
+  - 匿名: 1日5,000文字
+  - メールアドレス登録: 1日50,000文字（10倍）
 """
 
 import requests
@@ -14,6 +16,13 @@ class MyMemoryTranslator(BaseTranslator):
 
     API_URL = "https://api.mymemory.translated.net/get"
 
+    def __init__(self, email: str = ""):
+        self._email = email
+
+    def set_email(self, email: str) -> None:
+        """メールアドレスを設定する（使用量が10倍に増加）"""
+        self._email = email
+
     def translate(self, text: str, source: str = "ja", target: str = "en") -> str:
         """MyMemory API でテキストを翻訳する"""
         if not text.strip():
@@ -24,6 +33,12 @@ class MyMemoryTranslator(BaseTranslator):
                 "q": text,
                 "langpair": f"{source}|{target}",
             }
+
+            # メールアドレスが設定されていれば de パラメータに追加
+            # → 1日あたりの使用量が 5,000文字 → 50,000文字 に増加
+            if self._email:
+                params["de"] = self._email
+
             response = requests.get(self.API_URL, params=params, timeout=10)
             response.raise_for_status()
 

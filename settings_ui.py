@@ -304,69 +304,77 @@ class SettingsWindow(QWidget):
         layout = QVBoxLayout(tab)
         layout.setSpacing(12)
 
-        # エンジン選択
-        engine_group = QGroupBox("🔄 翻訳エンジン")
-        engine_layout = QFormLayout(engine_group)
+        # MyMemory 設定（メイン）
+        mymemory_group = QGroupBox("📧 MyMemory 設定")
+        mymemory_layout = QFormLayout(mymemory_group)
 
-        self._engine_combo = QComboBox()
-        for key, display_name in get_translator_names():
-            self._engine_combo.addItem(display_name, key)
-        self._engine_combo.currentIndexChanged.connect(self._on_engine_changed)
-        engine_layout.addRow("エンジン:", self._engine_combo)
-        layout.addWidget(engine_group)
+        # メールアドレス入力
+        self._mymemory_email_input = QLineEdit()
+        self._mymemory_email_input.setPlaceholderText("example@email.com（任意）")
+        mymemory_layout.addRow("メールアドレス:", self._mymemory_email_input)
 
-        # APIキー設定
-        api_group = QGroupBox("🔑 APIキー")
-        api_layout = QFormLayout(api_group)
-
-        self._deepl_key_input = QLineEdit()
-        self._deepl_key_input.setPlaceholderText("DeepL APIキーを入力...")
-        self._deepl_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        api_layout.addRow("DeepL:", self._deepl_key_input)
-
-        self._google_key_input = QLineEdit()
-        self._google_key_input.setPlaceholderText("Google Cloud APIキーを入力...")
-        self._google_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        api_layout.addRow("Google:", self._google_key_input)
+        # 説明ラベル
+        email_hint = QLabel(
+            "💡 メールアドレスを設定すると、1日の使用量が\n"
+            "   5,000文字 → 50,000文字（10倍）に増加します。\n"
+            "   未設定でも使えます。"
+        )
+        email_hint.setStyleSheet("color: #9ca3af; font-size: 11px; padding: 4px 0;")
+        email_hint.setWordWrap(True)
+        mymemory_layout.addRow("", email_hint)
 
         # 接続テストボタン
         test_btn = QPushButton("🧪 接続テスト")
         test_btn.setObjectName("secondaryBtn")
         test_btn.clicked.connect(self._test_connection)
-        api_layout.addRow("", test_btn)
+        mymemory_layout.addRow("", test_btn)
 
-        layout.addWidget(api_group)
+        layout.addWidget(mymemory_group)
+
+        # エンジン選択（将来の拡張用）
+        engine_group = QGroupBox("🔄 翻訳エンジン（将来の拡張）")
+        engine_layout = QFormLayout(engine_group)
+
+        self._engine_combo = QComboBox()
+        for key, display_name in get_translator_names():
+            self._engine_combo.addItem(display_name, key)
+        engine_layout.addRow("エンジン:", self._engine_combo)
+
+        self._deepl_key_input = QLineEdit()
+        self._deepl_key_input.setPlaceholderText("DeepL APIキーを入力...")
+        self._deepl_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        engine_layout.addRow("DeepL:", self._deepl_key_input)
+
+        self._google_key_input = QLineEdit()
+        self._google_key_input.setPlaceholderText("Google Cloud APIキーを入力...")
+        self._google_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        engine_layout.addRow("Google:", self._google_key_input)
+
+        layout.addWidget(engine_group)
+
         layout.addStretch()
         return tab
 
-    def _on_engine_changed(self, index: int) -> None:
-        """翻訳エンジンが変更されたときのハンドラ"""
-        engine_key = self._engine_combo.currentData()
-        # MyMemory以外のときはAPIキーセクションを目立たせる
-        needs_key = engine_key != "mymemory"
-        if needs_key:
-            key_field = (
-                self._deepl_key_input if engine_key == "deepl"
-                else self._google_key_input
-            )
-            key_field.setFocus()
-
     def _test_connection(self) -> None:
-        """選択中のエンジンで接続テストを行う"""
-        engine_key = self._engine_combo.currentData()
-        api_keys = {
-            "deepl": self._deepl_key_input.text(),
-            "google": self._google_key_input.text(),
-        }
+        """MyMemory APIの接続テストを行う"""
+        email = self._mymemory_email_input.text().strip()
 
         try:
-            translator = create_translator(engine_key, api_keys)
-            result = translator.translate("テスト", source="ja", target="en")
+            translator = create_translator("mymemory", mymemory_email=email)
+            result = translator.translate("これはテストです", source="ja", target="en")
+
+            email_status = (
+                f"📧 メールアドレス設定済み（1日50,000文字）"
+                if email
+                else "📧 メールアドレス未設定（1日5,000文字）"
+            )
+
             QMessageBox.information(
                 self,
                 "接続テスト成功",
-                f"✅ {translator.name()} に接続できました！\n\n"
-                f"テスト翻訳: 「テスト」→ 「{result}」",
+                f"✅ MyMemory に接続できました！\n\n"
+                f"テスト翻訳: 「これはテストです」→ 「{result}」\n\n"
+                f"{email_status}",
             )
         except TranslationError as e:
             QMessageBox.warning(
@@ -400,6 +408,9 @@ class SettingsWindow(QWidget):
         # 即ペースト
         self._auto_paste_check.setChecked(self._config.get("auto_paste", False))
 
+        # MyMemory メールアドレス
+        self._mymemory_email_input.setText(self._config.get("mymemory_email", ""))
+
         # 翻訳エンジン
         engine = self._config.get("translator", "mymemory")
         for i in range(self._engine_combo.count()):
@@ -428,6 +439,9 @@ class SettingsWindow(QWidget):
 
         # 即ペースト
         self._config.set("auto_paste", self._auto_paste_check.isChecked())
+
+        # MyMemory メールアドレス
+        self._config.set("mymemory_email", self._mymemory_email_input.text().strip())
 
         # 翻訳エンジン
         self._config.set("translator", self._engine_combo.currentData())

@@ -17,13 +17,18 @@ AVAILABLE_TRANSLATORS = {
 }
 
 
-def create_translator(engine_name: str, api_keys: dict = None) -> BaseTranslator:
+def create_translator(
+    engine_name: str,
+    api_keys: dict = None,
+    mymemory_email: str = "",
+) -> BaseTranslator:
     """
     設定に応じた翻訳エンジンのインスタンスを生成する。
 
     Args:
         engine_name: エンジン名（mymemory / deepl / google）
         api_keys: APIキーの辞書 {"deepl": "xxx", "google": "xxx"}
+        mymemory_email: MyMemory用メールアドレス（使用量10倍）
 
     Returns:
         翻訳エンジンのインスタンス
@@ -44,8 +49,10 @@ def create_translator(engine_name: str, api_keys: dict = None) -> BaseTranslator
 
     translator_class = AVAILABLE_TRANSLATORS[engine_name]
 
-    # APIキーが必要なエンジンにはキーを渡して初期化
-    if engine_name == "deepl":
+    # エンジンごとに適切なパラメータを渡して初期化
+    if engine_name == "mymemory":
+        return translator_class(email=mymemory_email)
+    elif engine_name == "deepl":
         return translator_class(api_key=api_keys.get("deepl", ""))
     elif engine_name == "google":
         return translator_class(api_key=api_keys.get("google", ""))
