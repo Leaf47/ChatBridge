@@ -122,7 +122,6 @@ class JA2ENApp:
         """翻訳ホットキーが押されたときの処理（別スレッドから呼ばれる）"""
         # クリップボードからテキストを取得
         text = self._clipboard.grab_text()
-
         if not text:
             return
 
@@ -133,7 +132,6 @@ class JA2ENApp:
         try:
             translated = self._translator.translate(text, source="ja", target="en")
         except TranslationError as e:
-            # エラー時はエラーメッセージをオーバーレイに表示
             self._bridge.show_overlay_result.emit(text, f"⚠️ {e}", self._translator.name())
             return
         except Exception as e:
