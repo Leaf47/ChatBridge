@@ -296,6 +296,25 @@ class ChatBridgeApp:
 
 def main():
     """エントリーポイント"""
+    # --- 多重起動防止 ---
+    # Windows の名前付き Mutex を使用して、同じアプリの2重起動を防ぐ
+    mutex_name = "ChatBridge_SingleInstance_Mutex"
+    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
+    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        # 既に起動中 → 簡易ダイアログを表示して終了
+        app = QApplication(sys.argv)
+        i18n.init("ja")
+        try:
+            config = Config()
+            i18n.init(config.get("ui_lang", "ja"))
+        except Exception:
+            pass
+        QMessageBox.information(
+            None, "ChatBridge",
+            t("already_running"),
+        )
+        sys.exit(0)
+
     # 最低限の Qt を初期化
     app = QApplication(sys.argv)
 
