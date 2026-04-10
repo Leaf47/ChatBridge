@@ -63,17 +63,17 @@ def _set_auto_start(enabled: bool) -> None:
         pass
 
 
-# サポートする翻訳言語の一覧（コード, i18nキー）
+# サポートする翻訳言語の一覧（コード, ネイティブ表記名）
 TRANSLATION_LANGUAGES = [
-    ("ja", "lang_ja"),
-    ("en", "lang_en"),
-    ("zh", "lang_zh"),
-    ("ko", "lang_ko"),
-    ("fr", "lang_fr"),
-    ("de", "lang_de"),
-    ("es", "lang_es"),
-    ("pt", "lang_pt"),
-    ("ru", "lang_ru"),
+    ("ja", "日本語"),
+    ("en", "English"),
+    ("zh", "中文"),
+    ("ko", "한국어"),
+    ("fr", "Français"),
+    ("de", "Deutsch"),
+    ("es", "Español"),
+    ("pt", "Português"),
+    ("ru", "Русский"),
 ]
 
 # ダークテーマのスタイルシート
@@ -399,9 +399,9 @@ class SettingsWindow(QWidget):
 
         self._source_lang_combo = QComboBox()
         self._target_lang_combo = QComboBox()
-        for code, key in TRANSLATION_LANGUAGES:
-            self._source_lang_combo.addItem(t(key), code)
-            self._target_lang_combo.addItem(t(key), code)
+        for code, name in TRANSLATION_LANGUAGES:
+            self._source_lang_combo.addItem(name, code)
+            self._target_lang_combo.addItem(name, code)
 
         # 横並びレイアウト: [翻訳元 ▼] [🔄] [翻訳先 ▼]
         lang_row = QHBoxLayout()
