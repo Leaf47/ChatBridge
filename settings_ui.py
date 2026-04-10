@@ -338,17 +338,26 @@ class SettingsWindow(QWidget):
         self._engine_combo = QComboBox()
         for key, display_name in get_translator_names():
             self._engine_combo.addItem(display_name, key)
+        self._engine_combo.setEnabled(False)
         engine_layout.addRow("エンジン:", self._engine_combo)
 
         self._deepl_key_input = QLineEdit()
-        self._deepl_key_input.setPlaceholderText("DeepL APIキーを入力...")
+        self._deepl_key_input.setPlaceholderText("将来のアップデートで有効化予定")
         self._deepl_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._deepl_key_input.setEnabled(False)
         engine_layout.addRow("DeepL:", self._deepl_key_input)
 
         self._google_key_input = QLineEdit()
-        self._google_key_input.setPlaceholderText("Google Cloud APIキーを入力...")
+        self._google_key_input.setPlaceholderText("将来のアップデートで有効化予定")
         self._google_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._google_key_input.setEnabled(False)
         engine_layout.addRow("Google:", self._google_key_input)
+
+        # 注釈ラベル
+        future_hint = QLabel("🔒 DeepL / Google への切り替えは将来のアップデートで対応予定です。")
+        future_hint.setStyleSheet("color: #6b7280; font-size: 11px; padding: 4px 0;")
+        future_hint.setWordWrap(True)
+        engine_layout.addRow("", future_hint)
 
         layout.addWidget(engine_group)
 

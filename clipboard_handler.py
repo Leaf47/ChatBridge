@@ -104,11 +104,10 @@ class ClipboardHandler:
         アクティブウィンドウのテキスト入力欄からテキストを取得する。
 
         手順:
-        1. 現在のクリップボード内容を退避
-        2. 修飾キーをすべてリリース（ユーザーがまだ押している場合の競合防止）
-        3. Ctrl+A で全選択
-        4. Ctrl+C でコピー
-        5. クリップボードからテキストを取得
+        1. クリップボード内容を退避
+        2. 修飾キーをすべてリリース
+        3. まず Ctrl+C で選択中のテキストを取得
+        4. 選択がなければ Ctrl+A + Ctrl+C で全選択してコピー
         """
         # クリップボードの内容を退避
         try:
@@ -121,19 +120,30 @@ class ClipboardHandler:
         _release_all_modifiers()
         time.sleep(0.15)
 
-        # Ctrl+A（全選択）
-        _key_combo(VK_CONTROL, 0x41)  # 0x41 = 'A'
+        # クリップボードをクリアして、コピー結果を判定できるようにする
+        pyperclip.copy("")
         time.sleep(0.05)
 
-        # Ctrl+C（コピー）
+        # まず Ctrl+C で選択中のテキストだけを取得（全選択はしない）
         _key_combo(VK_CONTROL, 0x43)  # 0x43 = 'C'
         time.sleep(0.15)
 
-        # クリップボードからテキストを取得
         try:
             text = pyperclip.paste()
         except Exception:
             text = ""
+
+        # 選択テキストが取れなかった場合は Ctrl+A → Ctrl+C にフォールバック
+        if not text.strip():
+            _key_combo(VK_CONTROL, 0x41)  # 0x41 = 'A' (全選択)
+            time.sleep(0.05)
+            _key_combo(VK_CONTROL, 0x43)  # 0x43 = 'C' (コピー)
+            time.sleep(0.15)
+
+            try:
+                text = pyperclip.paste()
+            except Exception:
+                text = ""
 
         return text.strip()
 
