@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QComboBox, QLineEdit, QPushButton, QSlider,
     QCheckBox, QGroupBox, QFormLayout, QMessageBox,
-    QTabWidget,
+    QTabWidget, QScrollArea,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QKeySequence
@@ -17,6 +17,50 @@ from PySide6.QtGui import QFont, QKeySequence
 from config import Config
 from translator import get_translator_names, create_translator, TranslationError
 from i18n import t, get_available_languages
+import sys
+import os
+
+
+# Windows レジストリでの自動起動管理
+_REGISTRY_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_APP_NAME = "ChatBridge"
+
+
+def _get_auto_start() -> bool:
+    """レジストリから自動起動設定を読み取る"""
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY, 0, winreg.KEY_READ)
+        winreg.QueryValueEx(key, _APP_NAME)
+        winreg.CloseKey(key)
+        return True
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def _set_auto_start(enabled: bool) -> None:
+    """レジストリに自動起動設定を書き込む"""
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY, 0, winreg.KEY_SET_VALUE)
+        if enabled:
+            # 実行ファイルのパスを登録
+            exe_path = sys.executable
+            script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
+            # exe化されている場合は exe パス、そうでなければ python + script
+            if getattr(sys, 'frozen', False):
+                value = f'"{exe_path}"'
+            else:
+                value = f'"{exe_path}" "{script_path}"'
+            winreg.SetValueEx(key, _APP_NAME, 0, winreg.REG_SZ, value)
+        else:
+            try:
+                winreg.DeleteValue(key, _APP_NAME)
+            except FileNotFoundError:
+                pass
+        winreg.CloseKey(key)
+    except OSError:
+        pass
 
 
 # サポートする翻訳言語の一覧（コード, i18nキー）
@@ -59,6 +103,7 @@ QLineEdit {
     border-radius: 6px;
     padding: 6px 10px;
     color: #f3f4f6;
+    min-height: 20px;
 }
 QLineEdit:focus {
     border-color: #8b5cf6;
@@ -69,6 +114,7 @@ QComboBox {
     border-radius: 6px;
     padding: 6px 10px;
     color: #f3f4f6;
+    min-height: 20px;
 }
 QComboBox::drop-down {
     border: none;
@@ -224,7 +270,7 @@ class SettingsWindow(QWidget):
     def _setup_window(self) -> None:
         """ウィンドウの属性を設定する"""
         self.setWindowTitle(t("settings_title"))
-        self.setFixedSize(480, 580)
+        self.setFixedSize(480, 620)
         self.setWindowFlags(
             Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.WindowCloseButtonHint
@@ -310,6 +356,13 @@ class SettingsWindow(QWidget):
 
         layout.addWidget(overlay_group)
 
+        # 起動設定
+        startup_group = QGroupBox("🚀 起動")
+        startup_layout = QVBoxLayout(startup_group)
+        self._auto_start_check = QCheckBox(t("general_auto_start"))
+        startup_layout.addWidget(self._auto_start_check)
+        layout.addWidget(startup_group)
+
         # UI言語設定
         lang_group = QGroupBox(t("general_ui_lang_group"))
         lang_layout = QFormLayout(lang_group)
@@ -330,14 +383,19 @@ class SettingsWindow(QWidget):
         return tab
 
     def _create_translator_tab(self) -> QWidget:
-        """翻訳エンジン設定タブを作成する"""
+        """翻訳エンジン設定タブを作成する（スクロール可能）"""
+        # スクロールエリアで内容が多くても対応
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setSpacing(12)
 
         # 翻訳方向
         lang_group = QGroupBox(t("translator_lang_group"))
-        lang_layout = QFormLayout(lang_group)
+        lang_group_layout = QVBoxLayout(lang_group)
 
         self._source_lang_combo = QComboBox()
         self._target_lang_combo = QComboBox()
@@ -345,14 +403,37 @@ class SettingsWindow(QWidget):
             self._source_lang_combo.addItem(t(key), code)
             self._target_lang_combo.addItem(t(key), code)
 
-        lang_layout.addRow(t("translator_source_label"), self._source_lang_combo)
-        lang_layout.addRow(t("translator_target_label"), self._target_lang_combo)
+        # 横並びレイアウト: [翻訳元 ▼] [🔄] [翻訳先 ▼]
+        lang_row = QHBoxLayout()
+        lang_row.setSpacing(8)
+
+        source_col = QVBoxLayout()
+        source_label = QLabel(t("translator_source_label"))
+        source_label.setStyleSheet("color: #9ca3af; font-size: 11px;")
+        source_col.addWidget(source_label)
+        source_col.addWidget(self._source_lang_combo)
+        lang_row.addLayout(source_col, 1)
 
         # 入れ替えボタン
-        swap_btn = QPushButton(t("translator_swap"))
+        swap_btn = QPushButton("🔄")
         swap_btn.setObjectName("secondaryBtn")
+        swap_btn.setFixedSize(36, 36)
+        swap_btn.setToolTip(t("translator_swap"))
         swap_btn.clicked.connect(self._swap_languages)
-        lang_layout.addRow("", swap_btn)
+        # 垂直中央に寄せるためにストレッチで挟む
+        swap_col = QVBoxLayout()
+        swap_col.addSpacing(16)
+        swap_col.addWidget(swap_btn)
+        lang_row.addLayout(swap_col, 0)
+
+        target_col = QVBoxLayout()
+        target_label = QLabel(t("translator_target_label"))
+        target_label.setStyleSheet("color: #9ca3af; font-size: 11px;")
+        target_col.addWidget(target_label)
+        target_col.addWidget(self._target_lang_combo)
+        lang_row.addLayout(target_col, 1)
+
+        lang_group_layout.addLayout(lang_row)
 
         layout.addWidget(lang_group)
 
@@ -406,7 +487,9 @@ class SettingsWindow(QWidget):
         layout.addWidget(engine_group)
 
         layout.addStretch()
-        return tab
+
+        scroll.setWidget(tab)
+        return scroll
 
     def _swap_languages(self) -> None:
         """翻訳元と翻訳先を入れ替える"""
@@ -464,6 +547,9 @@ class SettingsWindow(QWidget):
         # 即ペースト
         self._auto_paste_check.setChecked(self._config.get("auto_paste", False))
 
+        # 自動起動（レジストリの実際の状態を読み取る）
+        self._auto_start_check.setChecked(_get_auto_start())
+
         # UI言語
         ui_lang = self._config.get("ui_lang", "ja")
         for i in range(self._ui_lang_combo.count()):
@@ -514,6 +600,11 @@ class SettingsWindow(QWidget):
 
         # 即ペースト
         self._config.set("auto_paste", self._auto_paste_check.isChecked())
+
+        # 自動起動（レジストリに書き込み）
+        auto_start = self._auto_start_check.isChecked()
+        self._config.set("auto_start", auto_start)
+        _set_auto_start(auto_start)
 
         # UI言語
         self._config.set("ui_lang", self._ui_lang_combo.currentData())
