@@ -85,11 +85,26 @@ def _key_combo(modifier_vk: int, key_vk: int, delay: float = 0.05) -> None:
     time.sleep(delay)
 
 
-def _release_all_modifiers() -> None:
-    """すべての修飾キーをリリースする。"""
-    _release_key(VK_CONTROL)
-    _release_key(VK_SHIFT)
-    _release_key(VK_ALT)
+def _is_modifier_pressed() -> bool:
+    """修飾キー（Ctrl/Shift/Alt）が物理的に押されているかチェック"""
+    for vk in (VK_CONTROL, VK_SHIFT, VK_ALT):
+        # GetAsyncKeyState の最上位ビットが 1 ならキーが押されている
+        if user32.GetAsyncKeyState(vk) & 0x8000:
+            return True
+    return False
+
+
+def _wait_for_modifier_release(timeout: float = 2.0) -> None:
+    """
+    ユーザーが修飾キーを物理的に離すまで待機する。
+    SendInput でリリースを偽装するとフォーカスが飛んだり
+    pynput のキー状態が壊れる問題を回避する。
+    """
+    start = time.time()
+    while _is_modifier_pressed():
+        if time.time() - start > timeout:
+            break  # タイムアウト（安全弁）
+        time.sleep(0.02)  # 20ms間隔でポーリング
 
 
 def _get_foreground_window() -> int:
@@ -97,10 +112,11 @@ def _get_foreground_window() -> int:
     return user32.GetForegroundWindow()
 
 
-def _set_foreground_window(hwnd: int) -> None:
-    """指定したウィンドウをフォアグラウンドにする"""
-    if hwnd:
+def _ensure_foreground(hwnd: int) -> None:
+    """指定したウィンドウをフォアグラウンドにする（失敗しても続行）"""
+    if hwnd and user32.GetForegroundWindow() != hwnd:
         user32.SetForegroundWindow(hwnd)
+        time.sleep(0.05)
 
 
 class ClipboardHandler:
@@ -113,14 +129,6 @@ class ClipboardHandler:
     def grab_text(self) -> str:
         """
         アクティブウィンドウのテキスト入力欄からテキストを取得する。
-
-        手順:
-        1. フォアグラウンドウィンドウのハンドルを記録
-        2. クリップボード内容を退避
-        3. 修飾キーをすべてリリース
-        4. ターゲットウィンドウにフォーカスを確認
-        5. Ctrl+C で選択中のテキストを取得
-        6. 選択がなければ Ctrl+A + Ctrl+C で全選択
         """
         # ホットキーが押された時点のフォアグラウンドウィンドウを記録
         self._target_hwnd = _get_foreground_window()
@@ -131,14 +139,12 @@ class ClipboardHandler:
         except Exception:
             self._saved_clipboard = ""
 
-        # ユーザーがまだ修飾キーを押している可能性があるのでリリース
-        _release_all_modifiers()
-        time.sleep(0.1)
+        # ユーザーが修飾キーを物理的に離すまで待つ
+        # （SendInput でリリースを偽装するとフォーカスが飛ぶ問題を回避）
+        _wait_for_modifier_release()
 
-        # フォーカスがターゲットウィンドウにあることを確認
-        # （修飾キーリリースでフォーカスが移動する場合がある）
-        _set_foreground_window(self._target_hwnd)
-        time.sleep(0.1)
+        # ターゲットウィンドウにフォーカスがあることを確認
+        _ensure_foreground(self._target_hwnd)
 
         # クリップボードをクリアして、コピー結果を判定できるようにする
         pyperclip.copy("")
@@ -169,14 +175,12 @@ class ClipboardHandler:
 
     def paste_text(self, text: str) -> None:
         """テキストをアクティブウィンドウにペーストする。"""
-        # 修飾キーを全てリリース
-        _release_all_modifiers()
-        time.sleep(0.05)
+        # ユーザーが修飾キーを離すまで待つ
+        _wait_for_modifier_release()
 
         # ターゲットウィンドウにフォーカスを確認
         if self._target_hwnd:
-            _set_foreground_window(self._target_hwnd)
-            time.sleep(0.1)
+            _ensure_foreground(self._target_hwnd)
 
         # Ctrl+A（全選択 — 元のテキストを上書きするため）
         _key_combo(VK_CONTROL, 0x41)
