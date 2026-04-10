@@ -247,17 +247,42 @@ class TranslationOverlay(QWidget):
         # グローバルキーリスナーを開始
         self._start_key_listener()
 
+    # Enter/Esc の仮想キーコード（Win32 フィルタで使用）
+    _VK_RETURN = 0x0D
+    _VK_ESCAPE = 0x1B
+
     def _start_key_listener(self) -> None:
-        """オーバーレイ表示中のグローバルキーリスナーを開始する"""
+        """
+        オーバーレイ表示中のグローバルキーリスナーを開始する。
+
+        win32_event_filter を使って Enter/Esc キーをゲームに届かないよう
+        抑制（suppress）する。これにより、Enter でチャットの原文が
+        送信されてしまう問題を防ぐ。
+        """
         # 既存のリスナーがあれば停止
         self._stop_key_listener()
 
         self._overlay_visible = True
         self._key_listener = pynput_keyboard.Listener(
             on_press=self._on_global_key_press,
+            win32_event_filter=self._win32_key_filter,
         )
         self._key_listener.daemon = True
         self._key_listener.start()
+
+    def _win32_key_filter(self, msg, data) -> None:
+        """
+        Win32 低レベルキーボードフック用フィルタ。
+        オーバーレイ表示中に Enter/Esc キーを他アプリに渡さないよう抑制する。
+        他のキーはそのまま通過させる。
+        """
+        if not self._overlay_visible:
+            return
+
+        # data.vkCode に仮想キーコードが入っている
+        if data.vkCode in (self._VK_RETURN, self._VK_ESCAPE):
+            # suppress_event() でキーイベントをゲームに届かないようにする
+            self._key_listener.suppress_event()
 
     def _stop_key_listener(self) -> None:
         """グローバルキーリスナーを停止する"""
