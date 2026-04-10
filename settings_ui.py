@@ -693,8 +693,10 @@ class SettingsWindow(QWidget):
                 self._config.set("auto_start", False)
             self._initial_auto_start = self._auto_start_check.isChecked()
 
-        # UI言語
-        self._config.set("ui_lang", self._ui_lang_combo.currentData())
+        # UI言語（変更があれば再起動を促す）
+        new_lang = self._ui_lang_combo.currentData()
+        old_lang = self._config.get("ui_lang", "ja")
+        self._config.set("ui_lang", new_lang)
 
         # 翻訳言語ペア
         self._config.set("source_lang", self._source_lang_combo.currentData())
@@ -714,3 +716,13 @@ class SettingsWindow(QWidget):
         self._config.save()
         self.settings_changed.emit()
         self.hide()
+
+        # 言語が変更された場合、再起動を促す
+        if new_lang != old_lang:
+            msg = QMessageBox()
+            msg.setWindowTitle("ChatBridge")
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setText(t("lang_changed_restart"))
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            msg.addButton(QMessageBox.StandardButton.Ok)
+            msg.exec()
