@@ -41,6 +41,9 @@ DEFAULT_CONFIG = {
     # 確認なしで即ペーストするか
     "auto_paste": False,
 
+    # 初回セットアップ完了フラグ（初回起動ダイアログ表示後に True になる）
+    "setup_complete": False,
+
     # Windows 起動時に自動起動（タスクスケジューラで管理者権限起動）
     "auto_start": False,
 
@@ -76,9 +79,11 @@ class Config:
                 self._data = DEFAULT_CONFIG.copy()
                 self.save()
         else:
-            self.is_first_launch = True
             self._data = DEFAULT_CONFIG.copy()
             self.save()
+
+        # 初回起動判定: setup_complete が False なら初回起動
+        self.is_first_launch = not self._data.get("setup_complete", False)
 
     def save(self) -> None:
         """現在の設定をファイルに保存する。"""

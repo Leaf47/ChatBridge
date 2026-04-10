@@ -222,7 +222,6 @@ class ChatBridgeApp:
             success = _set_auto_start_admin(True)
             if success:
                 self._config.set("auto_start", True)
-                self._config.save()
                 QMessageBox.information(
                     None, "✅ ChatBridge",
                     t("first_launch_success"),
@@ -232,6 +231,10 @@ class ChatBridgeApp:
                     None, "⚠️ ChatBridge",
                     t("general_auto_start_admin_fail"),
                 )
+
+        # ダイアログ表示後（Yes/No どちらでも）セットアップ完了とする
+        self._config.set("setup_complete", True)
+        self._config.save()
 
     def _show_settings(self) -> None:
         """設定画面を表示する（シグナル経由でUIスレッドで実行）"""
