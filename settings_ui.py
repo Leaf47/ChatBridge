@@ -24,6 +24,17 @@ import os
 # Windows レジストリでの自動起動管理
 _REGISTRY_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 _APP_NAME = "ChatBridge"
+_TASK_NAME = "ChatBridge"
+
+
+def _get_exe_path() -> str:
+    """実行ファイルのパスを取得する"""
+    if getattr(sys, 'frozen', False):
+        return f'"{sys.executable}"'
+    else:
+        exe_path = sys.executable
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
+        return f'"{exe_path}" "{script_path}"'
 
 
 def _get_auto_start() -> bool:
@@ -39,20 +50,12 @@ def _get_auto_start() -> bool:
 
 
 def _set_auto_start(enabled: bool) -> None:
-    """レジストリに自動起動設定を書き込む"""
+    """レジストリに自動起動設定を書き込む（通常権限）"""
     try:
         import winreg
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY, 0, winreg.KEY_SET_VALUE)
         if enabled:
-            # 実行ファイルのパスを登録
-            exe_path = sys.executable
-            script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
-            # exe化されている場合は exe パス、そうでなければ python + script
-            if getattr(sys, 'frozen', False):
-                value = f'"{exe_path}"'
-            else:
-                value = f'"{exe_path}" "{script_path}"'
-            winreg.SetValueEx(key, _APP_NAME, 0, winreg.REG_SZ, value)
+            winreg.SetValueEx(key, _APP_NAME, 0, winreg.REG_SZ, _get_exe_path())
         else:
             try:
                 winreg.DeleteValue(key, _APP_NAME)
@@ -61,6 +64,60 @@ def _set_auto_start(enabled: bool) -> None:
         winreg.CloseKey(key)
     except OSError:
         pass
+
+
+def _get_auto_start_admin() -> bool:
+    """タスクスケジューラに管理者権限の自動起動タスクが登録されているか確認する"""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["schtasks", "/query", "/tn", _TASK_NAME],
+            capture_output=True, timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _set_auto_start_admin(enabled: bool) -> bool:
+    """
+    タスクスケジューラで管理者権限の自動起動を設定する。
+    登録時にUACが発生する場合がある。成功時True、失敗時Falseを返す。
+    """
+    import subprocess
+    try:
+        if enabled:
+            exe_path = _get_exe_path()
+            # PowerShellでタスクを作成（最上位特権 + ログオン時実行）
+            ps_script = (
+                f'$action = New-ScheduledTaskAction -Execute {exe_path};'
+                f'$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME;'
+                f'$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0;'
+                f'$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType Interactive;'
+                f'$task = New-ScheduledTask -Action $action -Trigger $trigger -Settings $settings -Principal $principal;'
+                f'Register-ScheduledTask -TaskName "{_TASK_NAME}" -InputObject $task -Force'
+            )
+            # 管理者昇格して実行（UACプロンプトが表示される）
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 f'Start-Process powershell -ArgumentList \'-Command {ps_script}\' -Verb RunAs -Wait'],
+                capture_output=True, timeout=30,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            # 登録されたか確認
+            return _get_auto_start_admin()
+        else:
+            # タスクの削除（管理者昇格）
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 f'Start-Process schtasks -ArgumentList \'/delete /tn "{_TASK_NAME}" /f\' -Verb RunAs -Wait'],
+                capture_output=True, timeout=15,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            return not _get_auto_start_admin()
+    except Exception:
+        return False
 
 
 # サポートする翻訳言語の一覧（コード, ネイティブ表記名）
@@ -359,8 +416,21 @@ class SettingsWindow(QWidget):
         # 起動設定
         startup_group = QGroupBox("🚀 起動")
         startup_layout = QVBoxLayout(startup_group)
+
         self._auto_start_check = QCheckBox(t("general_auto_start"))
+        self._auto_start_check.stateChanged.connect(self._on_auto_start_changed)
         startup_layout.addWidget(self._auto_start_check)
+
+        # 管理者権限チェック（auto_startの子オプション）
+        self._auto_start_admin_check = QCheckBox(t("general_auto_start_admin"))
+        self._auto_start_admin_check.setStyleSheet("padding-left: 22px;")
+        self._auto_start_admin_check.setEnabled(False)
+        startup_layout.addWidget(self._auto_start_admin_check)
+
+        auto_start_hint = QLabel(t("general_auto_start_hint"))
+        auto_start_hint.setStyleSheet("color: #6b7280; font-size: 11px; padding: 0 0 0 22px;")
+        auto_start_hint.setWordWrap(True)
+        startup_layout.addWidget(auto_start_hint)
         layout.addWidget(startup_group)
 
         # UI言語設定
@@ -415,9 +485,10 @@ class SettingsWindow(QWidget):
         lang_row.addLayout(source_col, 1)
 
         # 入れ替えボタン
-        swap_btn = QPushButton("🔄")
+        swap_btn = QPushButton("⇄")
         swap_btn.setObjectName("secondaryBtn")
-        swap_btn.setFixedSize(36, 36)
+        swap_btn.setFixedSize(44, 36)
+        swap_btn.setStyleSheet("font-size: 18px; font-weight: bold;")
         swap_btn.setToolTip(t("translator_swap"))
         swap_btn.clicked.connect(self._swap_languages)
         # 垂直中央に寄せるためにストレッチで挟む
@@ -491,6 +562,13 @@ class SettingsWindow(QWidget):
         scroll.setWidget(tab)
         return scroll
 
+    def _on_auto_start_changed(self, state) -> None:
+        """自動起動チェックの状態が変わったとき、管理者権限チェックの有効/無効を連動する"""
+        enabled = self._auto_start_check.isChecked()
+        self._auto_start_admin_check.setEnabled(enabled)
+        if not enabled:
+            self._auto_start_admin_check.setChecked(False)
+
     def _swap_languages(self) -> None:
         """翻訳元と翻訳先を入れ替える"""
         source_idx = self._source_lang_combo.currentIndex()
@@ -547,8 +625,12 @@ class SettingsWindow(QWidget):
         # 即ペースト
         self._auto_paste_check.setChecked(self._config.get("auto_paste", False))
 
-        # 自動起動（レジストリの実際の状態を読み取る）
-        self._auto_start_check.setChecked(_get_auto_start())
+        # 自動起動（config の保存値から読み込む）
+        auto_start = self._config.get("auto_start", False)
+        auto_start_admin = self._config.get("auto_start_admin", False)
+        self._auto_start_check.setChecked(auto_start)
+        self._auto_start_admin_check.setChecked(auto_start_admin)
+        self._auto_start_admin_check.setEnabled(auto_start)
 
         # UI言語
         ui_lang = self._config.get("ui_lang", "ja")
@@ -601,10 +683,30 @@ class SettingsWindow(QWidget):
         # 即ペースト
         self._config.set("auto_paste", self._auto_paste_check.isChecked())
 
-        # 自動起動（レジストリに書き込み）
+        # 自動起動
         auto_start = self._auto_start_check.isChecked()
+        auto_start_admin = self._auto_start_admin_check.isChecked()
         self._config.set("auto_start", auto_start)
-        _set_auto_start(auto_start)
+        self._config.set("auto_start_admin", auto_start_admin)
+
+        if auto_start and auto_start_admin:
+            # タスクスケジューラで管理者権限自動起動
+            _set_auto_start(False)  # レジストリ側は削除
+            success = _set_auto_start_admin(True)
+            if not success:
+                QMessageBox.warning(
+                    self, "⚠️",
+                    t("general_auto_start_admin_fail"),
+                )
+                self._auto_start_admin_check.setChecked(False)
+        elif auto_start:
+            # レジストリで通常権限自動起動
+            _set_auto_start_admin(False)  # タスク側は削除
+            _set_auto_start(True)
+        else:
+            # 両方削除
+            _set_auto_start(False)
+            _set_auto_start_admin(False)
 
         # UI言語
         self._config.set("ui_lang", self._ui_lang_combo.currentData())

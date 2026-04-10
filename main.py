@@ -8,7 +8,7 @@ ChatBridge — チャット翻訳ツール
 import sys
 import signal
 import threading
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QTimer, Qt, Slot, Signal, QObject
 
 from config import Config
@@ -18,7 +18,7 @@ from translator import create_translator, TranslationError
 from hotkey_manager import HotkeyManager
 from clipboard_handler import ClipboardHandler
 from overlay import TranslationOverlay
-from settings_ui import SettingsWindow
+from settings_ui import SettingsWindow, _set_auto_start_admin
 from tray_app import TrayApp
 
 
@@ -28,8 +28,8 @@ class UIBridge(QObject):
     シグナルは Qt が自動的にメインスレッドにディスパッチしてくれる。
     """
     show_settings_signal = Signal()
-    show_overlay_loading = Signal(str, str)        # original, engine_name
-    show_overlay_result = Signal(str, str, str)    # original, translated, engine_name
+    show_overlay_loading = Signal(str, str, str)        # original, engine_name, source_lang
+    show_overlay_result = Signal(str, str, str, str, str)    # original, translated, engine_name, source_lang, target_lang
     quit_signal = Signal()
 
 
@@ -101,9 +101,13 @@ class ChatBridgeApp:
         """アプリケーションを開始する"""
         print(t("starting"))
         print(f"{t('engine_label')}: {self._translator.name()}")
-        print(f"{t('hotkey_label')}: {self._config.get('hotkey_translate', 'ctrl+j')}")
+        print(f"{t('hotkey_label')}: {self._config.get('hotkey_translate', 'alt+j')}")
         print(t("tray_notice"))
         print(t("exit_hint"))
+
+        # 初回起動時にセットアップダイアログを表示
+        if self._config.is_first_launch:
+            QTimer.singleShot(500, self._show_first_launch_dialog)
 
         # Ctrl+C (SIGINT) で終了できるようにする
         signal.signal(signal.SIGINT, lambda *args: self._quit())
@@ -129,21 +133,21 @@ class ChatBridgeApp:
         if not text:
             return
 
-        # オーバーレイにローディングを表示（シグナル経由でUIスレッドへ）
-        self._bridge.show_overlay_loading.emit(text, self._translator.name())
-
         # 設定から言語ペアを取得
         source = self._config.get("source_lang", "ja")
         target = self._config.get("target_lang", "en")
+
+        # オーバーレイにローディングを表示（シグナル経由でUIスレッドへ）
+        self._bridge.show_overlay_loading.emit(text, self._translator.name(), source)
 
         # 翻訳を実行（現在のスレッドで実行=別スレッド）
         try:
             translated = self._translator.translate(text, source=source, target=target)
         except TranslationError as e:
-            self._bridge.show_overlay_result.emit(text, f"⚠️ {e}", self._translator.name())
+            self._bridge.show_overlay_result.emit(text, f"⚠️ {e}", self._translator.name(), source, target)
             return
         except Exception as e:
-            self._bridge.show_overlay_result.emit(text, f"⚠️ {e}", self._translator.name())
+            self._bridge.show_overlay_result.emit(text, f"⚠️ {e}", self._translator.name(), source, target)
             return
 
         # auto_paste が有効なら確認なしでペースト
@@ -152,7 +156,7 @@ class ChatBridgeApp:
             return
 
         # 翻訳結果をオーバーレイに表示（シグナル経由でUIスレッドへ）
-        self._bridge.show_overlay_result.emit(text, translated, self._translator.name())
+        self._bridge.show_overlay_result.emit(text, translated, self._translator.name(), source, target)
 
     @Slot(str)
     def _on_translation_confirmed(self, translated_text: str) -> None:
@@ -167,6 +171,39 @@ class ChatBridgeApp:
     def _on_translation_cancelled(self) -> None:
         """翻訳がキャンセルされたとき（Esc押下）"""
         self._clipboard.restore_original()
+
+    def _show_first_launch_dialog(self) -> None:
+        """初回起動時のセットアップダイアログを表示する"""
+        msg = QMessageBox()
+        msg.setWindowTitle("ChatBridge — " + t("first_launch_title"))
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText(t("first_launch_text"))
+        msg.setInformativeText(t("first_launch_detail"))
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+
+        # ボタン
+        yes_btn = msg.addButton(t("first_launch_yes"), QMessageBox.ButtonRole.AcceptRole)
+        no_btn = msg.addButton(t("first_launch_later"), QMessageBox.ButtonRole.RejectRole)
+        msg.setDefaultButton(yes_btn)
+
+        msg.exec()
+
+        if msg.clickedButton() == yes_btn:
+            # タスクスケジューラに管理者権限自動起動を登録
+            success = _set_auto_start_admin(True)
+            if success:
+                self._config.set("auto_start", True)
+                self._config.set("auto_start_admin", True)
+                self._config.save()
+                QMessageBox.information(
+                    None, "✅ ChatBridge",
+                    t("first_launch_success"),
+                )
+            else:
+                QMessageBox.warning(
+                    None, "⚠️ ChatBridge",
+                    t("general_auto_start_admin_fail"),
+                )
 
     def _show_settings(self) -> None:
         """設定画面を表示する（シグナル経由でUIスレッドで実行）"""

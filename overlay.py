@@ -17,6 +17,25 @@ from PySide6.QtGui import (
 from i18n import t
 
 
+# 言語コード → 表示ラベル（オーバーレイに表示する）
+_LANG_LABELS = {
+    "ja": "JP",
+    "en": "EN",
+    "zh": "ZH",
+    "ko": "KO",
+    "fr": "FR",
+    "de": "DE",
+    "es": "ES",
+    "pt": "PT",
+    "ru": "RU",
+}
+
+
+def _lang_label(lang_code: str) -> str:
+    """言語コードから表示用ラベルを返す"""
+    return _LANG_LABELS.get(lang_code, lang_code.upper())
+
+
 class TranslationOverlay(QWidget):
     """翻訳結果を表示するオーバーレイウィンドウ"""
 
@@ -137,6 +156,8 @@ class TranslationOverlay(QWidget):
         original: str,
         translated: str,
         engine_name: str,
+        source_lang: str = "ja",
+        target_lang: str = "en",
     ) -> None:
         """翻訳結果を表示してオーバーレイを表示する"""
         self._original_text = original
@@ -145,8 +166,10 @@ class TranslationOverlay(QWidget):
         self._is_loading = False
         self._loading_timer.stop()
 
-        self._original_label.setText(f"🇯🇵 {original}")
-        self._translated_label.setText(f"🇬🇧 {translated}")
+        src = _lang_label(source_lang)
+        tgt = _lang_label(target_lang)
+        self._original_label.setText(f"{src} {original}")
+        self._translated_label.setText(f"{tgt} {translated}")
         self._engine_label.setText(f"[{engine_name}]")
 
         self._position_window()
@@ -155,14 +178,15 @@ class TranslationOverlay(QWidget):
         self.activateWindow()
         self.setFocus()
 
-    def show_loading(self, original: str, engine_name: str) -> None:
+    def show_loading(self, original: str, engine_name: str, source_lang: str = "ja") -> None:
         """翻訳中の状態を表示する"""
         self._original_text = original
         self._engine_name = engine_name
         self._is_loading = True
         self._loading_dots = 0
 
-        self._original_label.setText(f"🇯🇵 {original}")
+        src = _lang_label(source_lang)
+        self._original_label.setText(f"{src} {original}")
         self._translated_label.setText(f"🔄 {t('overlay_loading')}")
         self._engine_label.setText(f"[{engine_name}]")
 

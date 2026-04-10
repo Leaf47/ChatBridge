@@ -9,9 +9,14 @@ import os
 from pathlib import Path
 from typing import Any
 
+import sys
 
-# 設定ファイルのパス（実行ファイルと同じディレクトリ）
-CONFIG_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
+# 設定ファイルのパス
+# exe化されている場合は exe と同じディレクトリ、そうでなければスクリプトのディレクトリ
+if getattr(sys, 'frozen', False):
+    CONFIG_DIR = Path(os.path.dirname(sys.executable))
+else:
+    CONFIG_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 # デフォルト設定
@@ -39,6 +44,9 @@ DEFAULT_CONFIG = {
     # Windows 起動時に自動起動
     "auto_start": False,
 
+    # 管理者権限で自動起動（タスクスケジューラ使用）
+    "auto_start_admin": False,
+
     # MyMemory メールアドレス（設定すると1日5,000文字→50,000文字に増加）
     "mymemory_email": "",
 
@@ -55,6 +63,7 @@ class Config:
 
     def __init__(self):
         self._data: dict = {}
+        self.is_first_launch = False
         self.load()
 
     def load(self) -> None:
@@ -70,6 +79,7 @@ class Config:
                 self._data = DEFAULT_CONFIG.copy()
                 self.save()
         else:
+            self.is_first_launch = True
             self._data = DEFAULT_CONFIG.copy()
             self.save()
 

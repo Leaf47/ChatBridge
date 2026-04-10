@@ -6,6 +6,7 @@ pystray を使ってシステムトレイにアイコンを表示し、
 """
 
 import os
+import sys
 import threading
 from typing import Callable, Optional
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
@@ -16,7 +17,11 @@ from i18n import t
 
 
 # アイコンファイルのパス
-_ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+# exe化されている場合は PyInstaller の一時展開先から読み込む
+if getattr(sys, 'frozen', False):
+    _ASSETS_DIR = os.path.join(sys._MEIPASS, "assets")
+else:
+    _ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 _ICON_PATH = os.path.join(_ASSETS_DIR, "icon.png")
 
 

@@ -57,6 +57,9 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "general_hotkey_hint": "例: alt+j, ctrl+shift+t, f2",
         "general_auto_paste": "翻訳結果を自動ペースト（確認なし）",
         "general_auto_start": "Windows 起動時に自動的に開く",
+        "general_auto_start_hint": "※ 通常: レジストリ / 管理者: タスクスケジューラを使用",
+        "general_auto_start_admin": "管理者権限で起動する（ゲーム動作に必要）",
+        "general_auto_start_admin_fail": "管理者権限での自動起動の登録に失敗しました。\nUACプロンプトで「はい」を選択してください。",
         "general_ui_lang_group": "🌐 表示言語",
         "general_ui_lang_label": "言語:",
         "general_ui_lang_hint": "※ 変更はアプリの再起動後に反映されます",
@@ -85,6 +88,14 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "overlay_position_cursor": "カーソル位置",
         "overlay_position_center": "画面中央",
         "overlay_position_top_right": "右上",
+
+        # 初回起動ダイアログ
+        "first_launch_title": "初回セットアップ",
+        "first_launch_text": "🎉 ChatBridge へようこそ！",
+        "first_launch_detail": "原神などのゲームで使用するには、管理者権限での起動が必要です。\n\nWindows 起動時に管理者権限で自動起動するように設定しますか？\n（タスクスケジューラを使用 — UACは今回のみ表示されます）",
+        "first_launch_yes": "✅ はい（推奨）",
+        "first_launch_later": "後で設定する",
+        "first_launch_success": "管理者権限での自動起動を登録しました。\n次回のWindows起動時から自動で起動します。",
 
         # 保存・キャンセル
         "save": "💾 保存",
@@ -152,6 +163,9 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "general_hotkey_hint": "e.g. alt+j, ctrl+shift+t, f2",
         "general_auto_paste": "Auto-paste translation (no confirmation)",
         "general_auto_start": "Launch on Windows startup",
+        "general_auto_start_hint": "* Normal: Registry / Admin: Task Scheduler",
+        "general_auto_start_admin": "Run as administrator (required for games)",
+        "general_auto_start_admin_fail": "Failed to register admin auto-start.\nPlease select 'Yes' in the UAC prompt.",
         "general_ui_lang_group": "🌐 Display Language",
         "general_ui_lang_label": "Language:",
         "general_ui_lang_hint": "※ Changes take effect after restarting the app",
@@ -180,6 +194,14 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "overlay_position_cursor": "Cursor Position",
         "overlay_position_center": "Screen Center",
         "overlay_position_top_right": "Top Right",
+
+        # First Launch Dialog
+        "first_launch_title": "First-Time Setup",
+        "first_launch_text": "🎉 Welcome to ChatBridge!",
+        "first_launch_detail": "To use with games like Genshin Impact, administrator privileges are required.\n\nWould you like to set up auto-start with administrator privileges on Windows startup?\n(Uses Task Scheduler — UAC will only be shown this time)",
+        "first_launch_yes": "✅ Yes (Recommended)",
+        "first_launch_later": "Set up later",
+        "first_launch_success": "Admin auto-start has been registered.\nChatBridge will auto-launch on next Windows startup.",
 
         # Save / Cancel
         "save": "💾 Save",
