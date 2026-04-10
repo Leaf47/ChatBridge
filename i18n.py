@@ -91,7 +91,7 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         # 初回起動ダイアログ
         "first_launch_title": "初回セットアップ",
         "first_launch_text": "🎉 ChatBridge へようこそ！",
-        "first_launch_detail": "Windows 起動時に管理者権限で自動起動するように設定しますか？\n（タスクスケジューラを使用 — UACは今回のみ表示されます）",
+        "first_launch_detail": "Windows 起動時に管理者権限で自動起動するように設定しますか？\n（タスクスケジューラを使用）",
         "first_launch_yes": "✅ はい（推奨）",
         "first_launch_later": "後で設定する",
         "first_launch_success": "管理者権限での自動起動を登録しました。\n次回のWindows起動時から自動で起動します。",
@@ -202,7 +202,7 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         # First Launch Dialog
         "first_launch_title": "First-Time Setup",
         "first_launch_text": "🎉 Welcome to ChatBridge!",
-        "first_launch_detail": "Would you like to set up auto-start with administrator privileges on Windows startup?\n(Uses Task Scheduler — UAC will only be shown this time)",
+        "first_launch_detail": "Would you like to set up auto-start with administrator privileges on Windows startup?\n(Uses Task Scheduler)",
         "first_launch_yes": "✅ Yes (Recommended)",
         "first_launch_later": "Set up later",
         "first_launch_success": "Admin auto-start has been registered.\nChatBridge will auto-launch on next Windows startup.",
