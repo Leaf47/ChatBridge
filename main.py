@@ -9,7 +9,7 @@ import sys
 import signal
 import threading
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer, Qt, Slot
+from PySide6.QtCore import QTimer, Qt, Slot, Signal, QObject
 
 from config import Config
 from translator import create_translator, TranslationError
@@ -18,6 +18,17 @@ from clipboard_handler import ClipboardHandler
 from overlay import TranslationOverlay
 from settings_ui import SettingsWindow
 from tray_app import TrayApp
+
+
+class UIBridge(QObject):
+    """
+    別スレッドから安全にUIを操作するためのブリッジ。
+    シグナルは Qt が自動的にメインスレッドにディスパッチしてくれる。
+    """
+    show_settings_signal = Signal()
+    show_overlay_loading = Signal(str, str)        # original, engine_name
+    show_overlay_result = Signal(str, str, str)    # original, translated, engine_name
+    quit_signal = Signal()
 
 
 class JA2ENApp:
@@ -37,6 +48,9 @@ class JA2ENApp:
         # クリップボードハンドラ
         self._clipboard = ClipboardHandler()
 
+        # UIブリッジ（別スレッド→メインスレッドの安全な通信）
+        self._bridge = UIBridge()
+
         # オーバーレイウィンドウ
         self._overlay = TranslationOverlay(
             opacity=self._config.get("overlay_opacity", 0.9),
@@ -45,9 +59,15 @@ class JA2ENApp:
         self._overlay.confirmed.connect(self._on_translation_confirmed)
         self._overlay.cancelled.connect(self._on_translation_cancelled)
 
+        # UIブリッジのシグナルをオーバーレイに接続
+        self._bridge.show_overlay_loading.connect(self._overlay.show_loading)
+        self._bridge.show_overlay_result.connect(self._overlay.show_translation)
+
         # 設定画面
         self._settings_window = SettingsWindow(self._config)
         self._settings_window.settings_changed.connect(self._on_settings_changed)
+        self._bridge.show_settings_signal.connect(self._settings_window.show)
+        self._bridge.quit_signal.connect(self._do_quit)
 
         # ホットキーマネージャー
         self._hotkey_manager = HotkeyManager()
@@ -86,8 +106,8 @@ class JA2ENApp:
         # Qt イベントループは C++ で動くため、Python のシグナルが届かない。
         # 定期的に Python に制御を戻すタイマーを追加する。
         self._signal_timer = QTimer()
-        self._signal_timer.timeout.connect(lambda: None)  # Python に制御を戻すだけ
-        self._signal_timer.start(200)  # 200msごと
+        self._signal_timer.timeout.connect(lambda: None)
+        self._signal_timer.start(200)
 
         # ホットキーリスナーを開始
         self._hotkey_manager.start()
@@ -102,21 +122,22 @@ class JA2ENApp:
         """翻訳ホットキーが押されたときの処理（別スレッドから呼ばれる）"""
         # クリップボードからテキストを取得
         text = self._clipboard.grab_text()
+
         if not text:
             return
 
-        # オーバーレイにローディングを表示（UIスレッドで実行）
-        QTimer.singleShot(0, lambda: self._overlay.show_loading(text, self._translator.name()))
+        # オーバーレイにローディングを表示（シグナル経由でUIスレッドへ）
+        self._bridge.show_overlay_loading.emit(text, self._translator.name())
 
         # 翻訳を実行（現在のスレッドで実行=別スレッド）
         try:
             translated = self._translator.translate(text, source="ja", target="en")
         except TranslationError as e:
             # エラー時はエラーメッセージをオーバーレイに表示
-            QTimer.singleShot(
-                0,
-                lambda: self._overlay.show_translation(text, f"⚠️ {e}", self._translator.name()),
-            )
+            self._bridge.show_overlay_result.emit(text, f"⚠️ {e}", self._translator.name())
+            return
+        except Exception as e:
+            self._bridge.show_overlay_result.emit(text, f"⚠️ 予期しないエラー: {e}", self._translator.name())
             return
 
         # auto_paste が有効なら確認なしでペースト
@@ -124,16 +145,18 @@ class JA2ENApp:
             self._clipboard.paste_text(translated)
             return
 
-        # 翻訳結果をオーバーレイに表示（UIスレッドで実行）
-        QTimer.singleShot(
-            0,
-            lambda: self._overlay.show_translation(text, translated, self._translator.name()),
-        )
+        # 翻訳結果をオーバーレイに表示（シグナル経由でUIスレッドへ）
+        self._bridge.show_overlay_result.emit(text, translated, self._translator.name())
 
     @Slot(str)
     def _on_translation_confirmed(self, translated_text: str) -> None:
         """翻訳結果が確定されたとき（Enter押下）"""
-        self._clipboard.paste_text(translated_text)
+        # ペースト操作は別スレッドで実行（UIをブロックしない）
+        threading.Thread(
+            target=self._clipboard.paste_text,
+            args=(translated_text,),
+            daemon=True,
+        ).start()
 
     @Slot()
     def _on_translation_cancelled(self) -> None:
@@ -141,8 +164,8 @@ class JA2ENApp:
         self._clipboard.restore_original()
 
     def _show_settings(self) -> None:
-        """設定画面を表示する（UIスレッドで実行する必要がある）"""
-        QTimer.singleShot(0, self._settings_window.show)
+        """設定画面を表示する（シグナル経由でUIスレッドで実行）"""
+        self._bridge.show_settings_signal.emit()
 
     def _on_settings_changed(self) -> None:
         """設定が変更されたときの処理"""
@@ -183,7 +206,12 @@ class JA2ENApp:
         print(f"翻訳エンジンを変更しました: {self._translator.name()}")
 
     def _quit(self) -> None:
-        """アプリケーションを終了する"""
+        """アプリケーションを終了する（どのスレッドからも呼べる）"""
+        self._bridge.quit_signal.emit()
+
+    @Slot()
+    def _do_quit(self) -> None:
+        """実際の終了処理（UIスレッドで実行される）"""
         print("JA2EN を終了します...")
         self._hotkey_manager.stop()
         self._tray.stop()
