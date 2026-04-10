@@ -23,6 +23,11 @@ env/
 Thumbs.db
 .DS_Store
 
+# ビルド成果物
+dist/
+build/
+*.spec
+
 # プロジェクト固有
 config.json
 *.log
