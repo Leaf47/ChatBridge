@@ -6,6 +6,7 @@ ChatBridge — チャット翻訳ツール
 """
 
 import sys
+import os
 import signal
 import threading
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -195,15 +196,51 @@ class ChatBridgeApp:
                 self._config.set("auto_start", True)
                 self._config.set("auto_start_admin", True)
                 self._config.save()
-                QMessageBox.information(
-                    None, "✅ ChatBridge",
-                    t("first_launch_success"),
+                # 管理者権限で再起動するか確認
+                restart_msg = QMessageBox()
+                restart_msg.setWindowTitle("ChatBridge")
+                restart_msg.setIcon(QMessageBox.Icon.Question)
+                restart_msg.setText(t("first_launch_success"))
+                restart_msg.setInformativeText(t("first_launch_restart"))
+                restart_msg.setWindowFlags(
+                    restart_msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
                 )
+                restart_yes = restart_msg.addButton(
+                    t("first_launch_restart_yes"), QMessageBox.ButtonRole.AcceptRole
+                )
+                restart_no = restart_msg.addButton(
+                    t("first_launch_restart_no"), QMessageBox.ButtonRole.RejectRole
+                )
+                restart_msg.setDefaultButton(restart_yes)
+                restart_msg.exec()
+
+                if restart_msg.clickedButton() == restart_yes:
+                    self._relaunch_as_admin()
             else:
                 QMessageBox.warning(
                     None, "⚠️ ChatBridge",
                     t("general_auto_start_admin_fail"),
                 )
+
+    def _relaunch_as_admin(self) -> None:
+        """管理者権限でアプリを再起動し、現プロセスを終了する"""
+        import ctypes
+        if getattr(sys, 'frozen', False):
+            # exe の場合（--noconsole でビルドしていればコンソール不要）
+            exe = sys.executable
+            params = ""
+        else:
+            # 開発時: pythonw.exe を使ってコンソールウィンドウを出さない
+            exe = sys.executable.replace("python.exe", "pythonw.exe")
+            script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
+            params = f'"{script}"'
+
+        # ShellExecuteW で管理者昇格して起動（UACプロンプト表示）
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", exe, params, None, 1  # 1 = SW_SHOWNORMAL
+        )
+        # 現プロセスを終了
+        self._do_quit()
 
     def _show_settings(self) -> None:
         """設定画面を表示する（シグナル経由でUIスレッドで実行）"""

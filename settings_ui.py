@@ -133,6 +133,16 @@ TRANSLATION_LANGUAGES = [
     ("ru", "Русский"),
 ]
 
+def _get_check_svg_path() -> str:
+    """チェックマークSVGファイルのパスを取得する（スラッシュ区切り）"""
+    if getattr(sys, 'frozen', False):
+        base = os.path.join(sys._MEIPASS, "assets")
+    else:
+        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+    # Qtのスタイルシートではスラッシュ区切りが必要
+    return os.path.join(base, "check.svg").replace("\\", "/")
+
+
 # ダークテーマのスタイルシート
 DARK_STYLE = """
 QWidget {
@@ -220,16 +230,36 @@ QSlider::sub-page:horizontal {
     background-color: #8b5cf6;
     border-radius: 3px;
 }
+QCheckBox {
+    spacing: 8px;
+    color: #e5e7eb;
+}
+QCheckBox:disabled {
+    color: #6b7280;
+}
 QCheckBox::indicator {
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
-    border: 1px solid #374151;
-    background-color: #111827;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 2px solid #6b7280;
+    background-color: #1f2937;
+}
+QCheckBox::indicator:hover {
+    border-color: #a78bfa;
+    background-color: #2d3748;
 }
 QCheckBox::indicator:checked {
     background-color: #8b5cf6;
     border-color: #8b5cf6;
+    image: url({{CHECK_SVG_PATH}});
+}
+QCheckBox::indicator:checked:hover {
+    background-color: #7c3aed;
+    border-color: #7c3aed;
+}
+QCheckBox::indicator:disabled {
+    border-color: #374151;
+    background-color: #111827;
 }
 QTabWidget::pane {
     border: 1px solid #374151;
@@ -327,12 +357,14 @@ class SettingsWindow(QWidget):
     def _setup_window(self) -> None:
         """ウィンドウの属性を設定する"""
         self.setWindowTitle(t("settings_title"))
-        self.setFixedSize(480, 620)
+        self.setFixedSize(480, 680)
         self.setWindowFlags(
             Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.WindowCloseButtonHint
         )
-        self.setStyleSheet(DARK_STYLE)
+        # チェックマークSVGのパスを動的に解決してスタイルに注入
+        style = DARK_STYLE.replace("{{CHECK_SVG_PATH}}", _get_check_svg_path())
+        self.setStyleSheet(style)
 
     def _setup_ui(self) -> None:
         """UIコンポーネントをセットアップする"""
@@ -367,7 +399,11 @@ class SettingsWindow(QWidget):
         main_layout.addLayout(btn_layout)
 
     def _create_general_tab(self) -> QWidget:
-        """一般設定タブを作成する"""
+        """一般設定タブを作成する（スクロール可能）"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setSpacing(12)
@@ -416,19 +452,23 @@ class SettingsWindow(QWidget):
         # 起動設定
         startup_group = QGroupBox("🚀 起動")
         startup_layout = QVBoxLayout(startup_group)
+        startup_layout.setSpacing(6)
 
         self._auto_start_check = QCheckBox(t("general_auto_start"))
         self._auto_start_check.stateChanged.connect(self._on_auto_start_changed)
         startup_layout.addWidget(self._auto_start_check)
 
-        # 管理者権限チェック（auto_startの子オプション）
+        # 管理者権限チェック（auto_startの子オプション、インデントで子要素感を出す）
+        admin_container = QWidget()
+        admin_layout = QHBoxLayout(admin_container)
+        admin_layout.setContentsMargins(26, 0, 0, 0)
         self._auto_start_admin_check = QCheckBox(t("general_auto_start_admin"))
-        self._auto_start_admin_check.setStyleSheet("padding-left: 22px;")
         self._auto_start_admin_check.setEnabled(False)
-        startup_layout.addWidget(self._auto_start_admin_check)
+        admin_layout.addWidget(self._auto_start_admin_check)
+        startup_layout.addWidget(admin_container)
 
         auto_start_hint = QLabel(t("general_auto_start_hint"))
-        auto_start_hint.setStyleSheet("color: #6b7280; font-size: 11px; padding: 0 0 0 22px;")
+        auto_start_hint.setStyleSheet("color: #6b7280; font-size: 11px; padding: 2px 0 0 28px;")
         auto_start_hint.setWordWrap(True)
         startup_layout.addWidget(auto_start_hint)
         layout.addWidget(startup_group)
@@ -450,7 +490,9 @@ class SettingsWindow(QWidget):
         layout.addWidget(lang_group)
 
         layout.addStretch()
-        return tab
+
+        scroll.setWidget(tab)
+        return scroll
 
     def _create_translator_tab(self) -> QWidget:
         """翻訳エンジン設定タブを作成する（スクロール可能）"""
@@ -631,6 +673,9 @@ class SettingsWindow(QWidget):
         self._auto_start_check.setChecked(auto_start)
         self._auto_start_admin_check.setChecked(auto_start_admin)
         self._auto_start_admin_check.setEnabled(auto_start)
+        # 保存時の差分検出用に初期値を記録
+        self._initial_auto_start = auto_start
+        self._initial_auto_start_admin = auto_start_admin
 
         # UI言語
         ui_lang = self._config.get("ui_lang", "ja")
@@ -683,30 +728,42 @@ class SettingsWindow(QWidget):
         # 即ペースト
         self._config.set("auto_paste", self._auto_paste_check.isChecked())
 
-        # 自動起動
+        # 自動起動（変更があった場合のみ操作する）
         auto_start = self._auto_start_check.isChecked()
         auto_start_admin = self._auto_start_admin_check.isChecked()
         self._config.set("auto_start", auto_start)
         self._config.set("auto_start_admin", auto_start_admin)
 
-        if auto_start and auto_start_admin:
-            # タスクスケジューラで管理者権限自動起動
-            _set_auto_start(False)  # レジストリ側は削除
-            success = _set_auto_start_admin(True)
-            if not success:
-                QMessageBox.warning(
-                    self, "⚠️",
-                    t("general_auto_start_admin_fail"),
-                )
-                self._auto_start_admin_check.setChecked(False)
-        elif auto_start:
-            # レジストリで通常権限自動起動
-            _set_auto_start_admin(False)  # タスク側は削除
-            _set_auto_start(True)
-        else:
-            # 両方削除
-            _set_auto_start(False)
-            _set_auto_start_admin(False)
+        # 設定が実際に変更された場合のみレジストリ/タスクスケジューラを操作
+        changed = (
+            auto_start != self._initial_auto_start
+            or auto_start_admin != self._initial_auto_start_admin
+        )
+        if changed:
+            if auto_start and auto_start_admin:
+                # タスクスケジューラで管理者権限自動起動
+                _set_auto_start(False)
+                success = _set_auto_start_admin(True)
+                if not success:
+                    QMessageBox.warning(
+                        self, "⚠️",
+                        t("general_auto_start_admin_fail"),
+                    )
+                    self._auto_start_admin_check.setChecked(False)
+            elif auto_start:
+                # レジストリで通常権限自動起動
+                if self._initial_auto_start_admin:
+                    _set_auto_start_admin(False)
+                _set_auto_start(True)
+            else:
+                # 両方削除
+                if self._initial_auto_start:
+                    _set_auto_start(False)
+                if self._initial_auto_start_admin:
+                    _set_auto_start_admin(False)
+            # 初期値を更新
+            self._initial_auto_start = auto_start
+            self._initial_auto_start_admin = auto_start_admin
 
         # UI言語
         self._config.set("ui_lang", self._ui_lang_combo.currentData())

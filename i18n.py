@@ -96,6 +96,9 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "first_launch_yes": "✅ はい（推奨）",
         "first_launch_later": "後で設定する",
         "first_launch_success": "管理者権限での自動起動を登録しました。\n次回のWindows起動時から自動で起動します。",
+        "first_launch_restart": "ゲームですぐ使えるように、\n今すぐ管理者権限で再起動しますか？",
+        "first_launch_restart_yes": "🔄 再起動する",
+        "first_launch_restart_no": "このまま使う",
 
         # 保存・キャンセル
         "save": "💾 保存",
@@ -202,6 +205,9 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "first_launch_yes": "✅ Yes (Recommended)",
         "first_launch_later": "Set up later",
         "first_launch_success": "Admin auto-start has been registered.\nChatBridge will auto-launch on next Windows startup.",
+        "first_launch_restart": "Would you like to restart with administrator privileges now\nso you can use it with games right away?",
+        "first_launch_restart_yes": "🔄 Restart now",
+        "first_launch_restart_no": "Continue without restart",
 
         # Save / Cancel
         "save": "💾 Save",
