@@ -1,7 +1,7 @@
 """
 設定画面モジュール
 
-ホットキー、翻訳エンジン、APIキー、オーバーレイ設定を管理するUIを提供する。
+ホットキー、翻訳エンジン、言語設定、オーバーレイ設定を管理するUIを提供する。
 ダークテーマのコンパクトなウィンドウ。
 """
 
@@ -16,7 +16,21 @@ from PySide6.QtGui import QFont, QKeySequence
 
 from config import Config
 from translator import get_translator_names, create_translator, TranslationError
+from i18n import t, get_available_languages
 
+
+# サポートする翻訳言語の一覧（コード, i18nキー）
+TRANSLATION_LANGUAGES = [
+    ("ja", "lang_ja"),
+    ("en", "lang_en"),
+    ("zh", "lang_zh"),
+    ("ko", "lang_ko"),
+    ("fr", "lang_fr"),
+    ("de", "lang_de"),
+    ("es", "lang_es"),
+    ("pt", "lang_pt"),
+    ("ru", "lang_ru"),
+]
 
 # ダークテーマのスタイルシート
 DARK_STYLE = """
@@ -145,13 +159,13 @@ class HotkeyInput(QLineEdit):
         self._hotkey = current_hotkey
         self.setText(current_hotkey)
         self.setReadOnly(True)
-        self.setPlaceholderText("クリックしてキーを入力...")
+        self.setPlaceholderText(t("general_hotkey_hint"))
         self._recording = False
 
     def mousePressEvent(self, event):
         """クリックでキー記録モードに入る"""
         self._recording = True
-        self.setText("キーを入力してください...")
+        self.setText("...")
         self.setStyleSheet("border-color: #8b5cf6; background-color: #1e1b4b;")
         super().mousePressEvent(event)
 
@@ -170,18 +184,15 @@ class HotkeyInput(QLineEdit):
         if modifiers & Qt.KeyboardModifier.ShiftModifier:
             parts.append("shift")
 
-        # メインキーを取得（修飾キー単独は無視）
         key = event.key()
         if key not in (
             Qt.Key.Key_Control, Qt.Key.Key_Alt, Qt.Key.Key_Shift,
             Qt.Key.Key_Meta, Qt.Key.Key_AltGr,
         ):
-            # キー名を取得
             key_text = event.text().lower()
             if key_text and key_text.isprintable():
                 parts.append(key_text)
             else:
-                # 特殊キー
                 key_name = QKeySequence(key).toString().lower()
                 if key_name:
                     parts.append(key_name)
@@ -190,7 +201,7 @@ class HotkeyInput(QLineEdit):
                 self._hotkey = "+".join(parts)
                 self.setText(self._hotkey)
                 self._recording = False
-                self.setStyleSheet("")  # スタイルをリセット
+                self.setStyleSheet("")
                 self.hotkey_changed.emit(self._hotkey)
 
     def get_hotkey(self) -> str:
@@ -201,7 +212,6 @@ class HotkeyInput(QLineEdit):
 class SettingsWindow(QWidget):
     """設定画面ウィンドウ"""
 
-    # 設定が変更されたことを通知するシグナル
     settings_changed = Signal()
 
     def __init__(self, config: Config):
@@ -213,8 +223,8 @@ class SettingsWindow(QWidget):
 
     def _setup_window(self) -> None:
         """ウィンドウの属性を設定する"""
-        self.setWindowTitle("JA2EN - 設定")
-        self.setFixedSize(480, 520)
+        self.setWindowTitle(t("settings_title"))
+        self.setFixedSize(480, 580)
         self.setWindowFlags(
             Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.WindowCloseButtonHint
@@ -228,26 +238,26 @@ class SettingsWindow(QWidget):
         main_layout.setSpacing(12)
 
         # タイトル
-        title = QLabel("⚙️ JA2EN 設定")
+        title = QLabel(t("settings_header"))
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #8b5cf6;")
         main_layout.addWidget(title)
 
         # タブウィジェット
         tabs = QTabWidget()
-        tabs.addTab(self._create_general_tab(), "一般")
-        tabs.addTab(self._create_translator_tab(), "翻訳エンジン")
+        tabs.addTab(self._create_general_tab(), t("tab_general"))
+        tabs.addTab(self._create_translator_tab(), t("tab_translator"))
         main_layout.addWidget(tabs)
 
         # ボタン行
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QPushButton("キャンセル")
+        cancel_btn = QPushButton(t("cancel"))
         cancel_btn.setObjectName("secondaryBtn")
         cancel_btn.clicked.connect(self.hide)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("💾 保存")
+        save_btn = QPushButton(t("save"))
         save_btn.clicked.connect(self._save_settings)
         btn_layout.addWidget(save_btn)
 
@@ -260,20 +270,24 @@ class SettingsWindow(QWidget):
         layout.setSpacing(12)
 
         # ホットキー設定
-        hotkey_group = QGroupBox("🎮 ホットキー")
+        hotkey_group = QGroupBox(t("general_hotkey_group"))
         hotkey_layout = QFormLayout(hotkey_group)
         self._hotkey_input = HotkeyInput()
-        hotkey_layout.addRow("翻訳ホットキー:", self._hotkey_input)
+        hotkey_layout.addRow(t("general_hotkey_label"), self._hotkey_input)
         layout.addWidget(hotkey_group)
 
         # オーバーレイ設定
-        overlay_group = QGroupBox("🖥️ オーバーレイ")
+        overlay_group = QGroupBox(t("overlay_opacity_group"))
         overlay_layout = QFormLayout(overlay_group)
 
         # 表示位置
         self._position_combo = QComboBox()
-        self._position_combo.addItems(["カーソル付近", "画面中央", "右下"])
-        overlay_layout.addRow("表示位置:", self._position_combo)
+        self._position_combo.addItems([
+            t("overlay_position_cursor"),
+            t("overlay_position_center"),
+            t("overlay_position_top_right"),
+        ])
+        overlay_layout.addRow(t("overlay_position_group").replace("📍 ", ""), self._position_combo)
 
         # 透明度スライダー
         opacity_widget = QWidget()
@@ -288,13 +302,30 @@ class SettingsWindow(QWidget):
         )
         opacity_hlayout.addWidget(self._opacity_slider)
         opacity_hlayout.addWidget(self._opacity_label)
-        overlay_layout.addRow("透明度:", opacity_widget)
+        overlay_layout.addRow(t("overlay_opacity_label"), opacity_widget)
 
         # 即ペーストオプション
-        self._auto_paste_check = QCheckBox("確認なしで即座にペーストする")
+        self._auto_paste_check = QCheckBox(t("general_auto_paste"))
         overlay_layout.addRow("", self._auto_paste_check)
 
         layout.addWidget(overlay_group)
+
+        # UI言語設定
+        lang_group = QGroupBox(t("general_ui_lang_group"))
+        lang_layout = QFormLayout(lang_group)
+
+        self._ui_lang_combo = QComboBox()
+        for code, name in get_available_languages():
+            self._ui_lang_combo.addItem(name, code)
+        lang_layout.addRow(t("general_ui_lang_label"), self._ui_lang_combo)
+
+        lang_hint = QLabel(t("general_ui_lang_hint"))
+        lang_hint.setStyleSheet("color: #6b7280; font-size: 11px; padding: 4px 0;")
+        lang_hint.setWordWrap(True)
+        lang_layout.addRow("", lang_hint)
+
+        layout.addWidget(lang_group)
+
         layout.addStretch()
         return tab
 
@@ -304,27 +335,41 @@ class SettingsWindow(QWidget):
         layout = QVBoxLayout(tab)
         layout.setSpacing(12)
 
-        # MyMemory 設定（メイン）
-        mymemory_group = QGroupBox("📧 MyMemory 設定")
+        # 翻訳方向
+        lang_group = QGroupBox(t("translator_lang_group"))
+        lang_layout = QFormLayout(lang_group)
+
+        self._source_lang_combo = QComboBox()
+        self._target_lang_combo = QComboBox()
+        for code, key in TRANSLATION_LANGUAGES:
+            self._source_lang_combo.addItem(t(key), code)
+            self._target_lang_combo.addItem(t(key), code)
+
+        lang_layout.addRow(t("translator_source_label"), self._source_lang_combo)
+        lang_layout.addRow(t("translator_target_label"), self._target_lang_combo)
+
+        # 入れ替えボタン
+        swap_btn = QPushButton(t("translator_swap"))
+        swap_btn.setObjectName("secondaryBtn")
+        swap_btn.clicked.connect(self._swap_languages)
+        lang_layout.addRow("", swap_btn)
+
+        layout.addWidget(lang_group)
+
+        # MyMemory 設定
+        mymemory_group = QGroupBox(t("translator_mymemory_group"))
         mymemory_layout = QFormLayout(mymemory_group)
 
-        # メールアドレス入力
         self._mymemory_email_input = QLineEdit()
-        self._mymemory_email_input.setPlaceholderText("example@email.com（任意）")
-        mymemory_layout.addRow("メールアドレス:", self._mymemory_email_input)
+        self._mymemory_email_input.setPlaceholderText(t("translator_email_placeholder"))
+        mymemory_layout.addRow(t("translator_email_label"), self._mymemory_email_input)
 
-        # 説明ラベル
-        email_hint = QLabel(
-            "💡 メールアドレスを設定すると、1日の使用量が\n"
-            "   5,000文字 → 50,000文字（10倍）に増加します。\n"
-            "   未設定でも使えます。"
-        )
+        email_hint = QLabel(t("translator_email_hint"))
         email_hint.setStyleSheet("color: #9ca3af; font-size: 11px; padding: 4px 0;")
         email_hint.setWordWrap(True)
         mymemory_layout.addRow("", email_hint)
 
-        # 接続テストボタン
-        test_btn = QPushButton("🧪 接続テスト")
+        test_btn = QPushButton(t("translator_test"))
         test_btn.setObjectName("secondaryBtn")
         test_btn.clicked.connect(self._test_connection)
         mymemory_layout.addRow("", test_btn)
@@ -332,29 +377,28 @@ class SettingsWindow(QWidget):
         layout.addWidget(mymemory_group)
 
         # エンジン選択（将来の拡張用）
-        engine_group = QGroupBox("🔄 翻訳エンジン（将来の拡張）")
+        engine_group = QGroupBox(t("translator_future_group"))
         engine_layout = QFormLayout(engine_group)
 
         self._engine_combo = QComboBox()
         for key, display_name in get_translator_names():
             self._engine_combo.addItem(display_name, key)
         self._engine_combo.setEnabled(False)
-        engine_layout.addRow("エンジン:", self._engine_combo)
+        engine_layout.addRow(t("translator_engine_label"), self._engine_combo)
 
         self._deepl_key_input = QLineEdit()
-        self._deepl_key_input.setPlaceholderText("将来のアップデートで有効化予定")
+        self._deepl_key_input.setPlaceholderText(t("translator_future_placeholder"))
         self._deepl_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self._deepl_key_input.setEnabled(False)
         engine_layout.addRow("DeepL:", self._deepl_key_input)
 
         self._google_key_input = QLineEdit()
-        self._google_key_input.setPlaceholderText("将来のアップデートで有効化予定")
+        self._google_key_input.setPlaceholderText(t("translator_future_placeholder"))
         self._google_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self._google_key_input.setEnabled(False)
         engine_layout.addRow("Google:", self._google_key_input)
 
-        # 注釈ラベル
-        future_hint = QLabel("🔒 DeepL / Google への切り替えは将来のアップデートで対応予定です。")
+        future_hint = QLabel(t("translator_future_hint"))
         future_hint.setStyleSheet("color: #6b7280; font-size: 11px; padding: 4px 0;")
         future_hint.setWordWrap(True)
         engine_layout.addRow("", future_hint)
@@ -364,38 +408,41 @@ class SettingsWindow(QWidget):
         layout.addStretch()
         return tab
 
+    def _swap_languages(self) -> None:
+        """翻訳元と翻訳先を入れ替える"""
+        source_idx = self._source_lang_combo.currentIndex()
+        target_idx = self._target_lang_combo.currentIndex()
+        self._source_lang_combo.setCurrentIndex(target_idx)
+        self._target_lang_combo.setCurrentIndex(source_idx)
+
     def _test_connection(self) -> None:
         """MyMemory APIの接続テストを行う"""
         email = self._mymemory_email_input.text().strip()
+        source = self._source_lang_combo.currentData()
+        target = self._target_lang_combo.currentData()
 
         try:
             translator = create_translator("mymemory", mymemory_email=email)
-            result = translator.translate("これはテストです", source="ja", target="en")
+            test_text = "これはテストです" if source == "ja" else "This is a test"
+            result = translator.translate(test_text, source=source, target=target)
 
             email_status = (
-                f"📧 メールアドレス設定済み（1日50,000文字）"
-                if email
-                else "📧 メールアドレス未設定（1日5,000文字）"
+                f"📧 50,000 chars/day" if email else "📧 5,000 chars/day"
             )
 
             QMessageBox.information(
                 self,
-                "接続テスト成功",
-                f"✅ MyMemory に接続できました！\n\n"
-                f"テスト翻訳: 「これはテストです」→ 「{result}」\n\n"
-                f"{email_status}",
+                "✅",
+                t("translator_test_success",
+                  source=test_text, result=result, email_status=email_status),
             )
         except TranslationError as e:
             QMessageBox.warning(
-                self,
-                "接続テスト失敗",
-                f"❌ エラーが発生しました:\n\n{e}",
+                self, "❌", t("translator_test_fail", error=str(e)),
             )
         except Exception as e:
             QMessageBox.critical(
-                self,
-                "接続テスト失敗",
-                f"❌ 予期しないエラー:\n\n{e}",
+                self, "❌", t("translator_test_fail", error=str(e)),
             )
 
     def _load_settings(self) -> None:
@@ -416,6 +463,25 @@ class SettingsWindow(QWidget):
 
         # 即ペースト
         self._auto_paste_check.setChecked(self._config.get("auto_paste", False))
+
+        # UI言語
+        ui_lang = self._config.get("ui_lang", "ja")
+        for i in range(self._ui_lang_combo.count()):
+            if self._ui_lang_combo.itemData(i) == ui_lang:
+                self._ui_lang_combo.setCurrentIndex(i)
+                break
+
+        # 翻訳言語ペア
+        source = self._config.get("source_lang", "ja")
+        target = self._config.get("target_lang", "en")
+        for i in range(self._source_lang_combo.count()):
+            if self._source_lang_combo.itemData(i) == source:
+                self._source_lang_combo.setCurrentIndex(i)
+                break
+        for i in range(self._target_lang_combo.count()):
+            if self._target_lang_combo.itemData(i) == target:
+                self._target_lang_combo.setCurrentIndex(i)
+                break
 
         # MyMemory メールアドレス
         self._mymemory_email_input.setText(self._config.get("mymemory_email", ""))
@@ -448,6 +514,13 @@ class SettingsWindow(QWidget):
 
         # 即ペースト
         self._config.set("auto_paste", self._auto_paste_check.isChecked())
+
+        # UI言語
+        self._config.set("ui_lang", self._ui_lang_combo.currentData())
+
+        # 翻訳言語ペア
+        self._config.set("source_lang", self._source_lang_combo.currentData())
+        self._config.set("target_lang", self._target_lang_combo.currentData())
 
         # MyMemory メールアドレス
         self._config.set("mymemory_email", self._mymemory_email_input.text().strip())

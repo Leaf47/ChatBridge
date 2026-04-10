@@ -1,5 +1,5 @@
 """
-JA2EN 設定管理モジュール
+ChatBridge 設定管理モジュール
 
 config.json の読み書きとデフォルト値の管理を担当する。
 """
@@ -21,6 +21,13 @@ DEFAULT_CONFIG = {
 
     # 翻訳エンジン（mymemory / deepl / google）
     "translator": "mymemory",
+
+    # 翻訳の言語設定
+    "source_lang": "ja",
+    "target_lang": "en",
+
+    # UI表示言語（ja / en、外部JSONで追加可能）
+    "ui_lang": "ja",
 
     # オーバーレイ設定
     "overlay_position": "cursor",  # cursor / center / corner

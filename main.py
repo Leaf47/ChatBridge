@@ -1,5 +1,5 @@
 """
-JA2EN — ゲーム内日本語→英語翻訳ツール
+ChatBridge — チャット翻訳ツール
 
 メインエントリーポイント。
 すべてのコンポーネントを初期化し、アプリケーションのイベントループを開始する。
@@ -12,6 +12,8 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer, Qt, Slot, Signal, QObject
 
 from config import Config
+import i18n
+from i18n import t
 from translator import create_translator, TranslationError
 from hotkey_manager import HotkeyManager
 from clipboard_handler import ClipboardHandler
@@ -31,16 +33,19 @@ class UIBridge(QObject):
     quit_signal = Signal()
 
 
-class JA2ENApp:
-    """JA2EN アプリケーションのメインクラス"""
+class ChatBridgeApp:
+    """ChatBridge アプリケーションのメインクラス"""
 
     def __init__(self):
         # Qt アプリケーション
         self._app = QApplication(sys.argv)
-        self._app.setQuitOnLastWindowClosed(False)  # トレイアプリなのでウィンドウを閉じても終了しない
+        self._app.setQuitOnLastWindowClosed(False)
 
         # 設定の読み込み
         self._config = Config()
+
+        # i18n 初期化（設定の ui_lang に基づく）
+        i18n.init(self._config.get("ui_lang", "ja"))
 
         # 翻訳エンジンの初期化
         self._translator = self._create_translator()
@@ -94,17 +99,16 @@ class JA2ENApp:
 
     def run(self) -> int:
         """アプリケーションを開始する"""
-        print("JA2EN を起動しています...")
-        print(f"翻訳エンジン: {self._translator.name()}")
-        print(f"ホットキー: {self._config.get('hotkey_translate', 'ctrl+j')}")
-        print("システムトレイにアイコンが表示されます。")
-        print("終了: トレイアイコン右クリック → 終了、または Ctrl+C")
+        print(t("starting"))
+        print(f"{t('engine_label')}: {self._translator.name()}")
+        print(f"{t('hotkey_label')}: {self._config.get('hotkey_translate', 'ctrl+j')}")
+        print(t("tray_notice"))
+        print(t("exit_hint"))
 
         # Ctrl+C (SIGINT) で終了できるようにする
         signal.signal(signal.SIGINT, lambda *args: self._quit())
 
         # Qt イベントループは C++ で動くため、Python のシグナルが届かない。
-        # 定期的に Python に制御を戻すタイマーを追加する。
         self._signal_timer = QTimer()
         self._signal_timer.timeout.connect(lambda: None)
         self._signal_timer.start(200)
@@ -128,14 +132,18 @@ class JA2ENApp:
         # オーバーレイにローディングを表示（シグナル経由でUIスレッドへ）
         self._bridge.show_overlay_loading.emit(text, self._translator.name())
 
+        # 設定から言語ペアを取得
+        source = self._config.get("source_lang", "ja")
+        target = self._config.get("target_lang", "en")
+
         # 翻訳を実行（現在のスレッドで実行=別スレッド）
         try:
-            translated = self._translator.translate(text, source="ja", target="en")
+            translated = self._translator.translate(text, source=source, target=target)
         except TranslationError as e:
             self._bridge.show_overlay_result.emit(text, f"⚠️ {e}", self._translator.name())
             return
         except Exception as e:
-            self._bridge.show_overlay_result.emit(text, f"⚠️ 予期しないエラー: {e}", self._translator.name())
+            self._bridge.show_overlay_result.emit(text, f"⚠️ {e}", self._translator.name())
             return
 
         # auto_paste が有効なら確認なしでペースト
@@ -149,7 +157,6 @@ class JA2ENApp:
     @Slot(str)
     def _on_translation_confirmed(self, translated_text: str) -> None:
         """翻訳結果が確定されたとき（Enter押下）"""
-        # ペースト操作は別スレッドで実行（UIをブロックしない）
         threading.Thread(
             target=self._clipboard.paste_text,
             args=(translated_text,),
@@ -167,6 +174,9 @@ class JA2ENApp:
 
     def _on_settings_changed(self) -> None:
         """設定が変更されたときの処理"""
+        # i18n を再初期化
+        i18n.init(self._config.get("ui_lang", "ja"))
+
         # 翻訳エンジンを再作成
         self._translator = self._create_translator()
 
@@ -188,20 +198,20 @@ class JA2ENApp:
         # トレイのエンジン表示を更新
         self._tray.update_engine(self._config.get("translator", "mymemory"))
 
-        print(f"設定を更新しました。エンジン: {self._translator.name()}")
+        print(t("settings_updated", engine=self._translator.name()))
 
     def _on_toggle_pause(self, paused: bool) -> None:
         """一時停止/再開の切り替え"""
         self._hotkey_manager.set_enabled(not paused)
-        status = "一時停止" if paused else "再開"
-        print(f"JA2EN: {status}")
+        status = t("paused") if paused else t("resumed")
+        print(f"ChatBridge: {status}")
 
     def _on_engine_change_from_tray(self, engine_name: str) -> None:
         """トレイメニューからエンジンが変更されたとき"""
         self._config.set("translator", engine_name)
         self._config.save()
         self._translator = self._create_translator()
-        print(f"翻訳エンジンを変更しました: {self._translator.name()}")
+        print(t("engine_changed", engine=self._translator.name()))
 
     def _quit(self) -> None:
         """アプリケーションを終了する（どのスレッドからも呼べる）"""
@@ -210,7 +220,7 @@ class JA2ENApp:
     @Slot()
     def _do_quit(self) -> None:
         """実際の終了処理（UIスレッドで実行される）"""
-        print("JA2EN を終了します...")
+        print(t("shutting_down"))
         self._hotkey_manager.stop()
         self._tray.stop()
         self._app.quit()
@@ -219,10 +229,10 @@ class JA2ENApp:
 def main():
     """エントリーポイント"""
     try:
-        app = JA2ENApp()
+        app = ChatBridgeApp()
         sys.exit(app.run())
     except KeyboardInterrupt:
-        print("\nJA2EN を終了しました。")
+        print(f"\n{t('shut_down')}")
         sys.exit(0)
 
 

@@ -14,6 +14,8 @@ from PySide6.QtGui import (
     QFontDatabase, QCursor, QKeyEvent, QPaintEvent,
 )
 
+from i18n import t
+
 
 class TranslationOverlay(QWidget):
     """翻訳結果を表示するオーバーレイウィンドウ"""
@@ -61,7 +63,7 @@ class TranslationOverlay(QWidget):
 
         # ヘッダー行: アプリ名 + エンジン名
         header_layout = QHBoxLayout()
-        self._title_label = QLabel("JA2EN")
+        self._title_label = QLabel(t("app_name"))
         self._title_label.setStyleSheet(
             "color: #8b5cf6; font-weight: bold; font-size: 13px;"
         )
@@ -105,9 +107,9 @@ class TranslationOverlay(QWidget):
 
         # ヒント行
         hint_layout = QHBoxLayout()
-        enter_hint = QLabel("Enter: 確定")
+        enter_hint = QLabel(t("overlay_confirm"))
         enter_hint.setStyleSheet("color: #6b7280; font-size: 11px;")
-        esc_hint = QLabel("Esc: キャンセル")
+        esc_hint = QLabel(t("overlay_cancel"))
         esc_hint.setStyleSheet("color: #6b7280; font-size: 11px;")
         hint_layout.addWidget(enter_hint)
         hint_layout.addStretch()
@@ -161,7 +163,7 @@ class TranslationOverlay(QWidget):
         self._loading_dots = 0
 
         self._original_label.setText(f"🇯🇵 {original}")
-        self._translated_label.setText("🔄 翻訳中...")
+        self._translated_label.setText(f"🔄 {t('overlay_loading')}")
         self._engine_label.setText(f"[{engine_name}]")
 
         self._loading_timer.start(400)  # 400msごとにアニメーション更新
@@ -174,7 +176,8 @@ class TranslationOverlay(QWidget):
         """ローディングアニメーションを更新する"""
         self._loading_dots = (self._loading_dots + 1) % 4
         dots = "." * self._loading_dots
-        self._translated_label.setText(f"🔄 翻訳中{dots}")
+        base = t('overlay_loading').rstrip('.')
+        self._translated_label.setText(f"🔄 {base}{dots}")
 
     def _position_window(self) -> None:
         """オーバーレイの表示位置を設定する"""
