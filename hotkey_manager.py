@@ -155,7 +155,16 @@ class HotkeyManager:
             return keyboard.Key.alt_l
         if key == keyboard.Key.shift_r:
             return keyboard.Key.shift_l
-        # KeyCode の場合、小文字に正規化
-        if isinstance(key, keyboard.KeyCode) and key.char:
-            return keyboard.KeyCode.from_char(key.char.lower())
+
+        # KeyCode の場合、仮想キーコード(vk)を使って正規化する
+        # Ctrl を押しながらキーを押すと char が制御文字になるため、
+        # vk から実際のキーを判定する必要がある
+        if isinstance(key, keyboard.KeyCode):
+            # vk が A-Z の範囲 (65-90) なら、対応する小文字に変換
+            if key.vk is not None and 65 <= key.vk <= 90:
+                return keyboard.KeyCode.from_char(chr(key.vk + 32))  # 小文字化
+            # vk がない場合は char で正規化
+            if key.char and key.char.isprintable():
+                return keyboard.KeyCode.from_char(key.char.lower())
+
         return key
