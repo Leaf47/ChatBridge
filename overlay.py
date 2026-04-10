@@ -3,8 +3,14 @@
 
 ゲーム画面の上に半透明のダークパネルとして表示される。
 Enter で翻訳結果を確定、Esc でキャンセル。
+
+フルスクリーンゲーム対応:
+  - ウィンドウのフォーカスを奪わない（SWP_NOACTIVATE）
+  - Enter/Esc はグローバルホットキー（pynput）で処理する
 """
 
+import sys
+import threading
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 )
@@ -15,6 +21,23 @@ from PySide6.QtGui import (
 )
 
 from i18n import t
+
+# Win32 API を使用してフォーカスを奪わずに最前面表示する
+if sys.platform == "win32":
+    import ctypes
+    import ctypes.wintypes
+
+    _user32 = ctypes.windll.user32
+
+    # SetWindowPos の定数
+    HWND_TOPMOST = ctypes.wintypes.HWND(-1)
+    SWP_NOACTIVATE = 0x0010
+    SWP_NOMOVE = 0x0002
+    SWP_NOSIZE = 0x0001
+    SWP_SHOWWINDOW = 0x0040
+
+# pynput でグローバルキー入力を監視（オーバーレイ表示中のみ）
+from pynput import keyboard as pynput_keyboard
 
 
 # 言語コード → 表示ラベル（オーバーレイに表示する）
@@ -43,6 +66,10 @@ class TranslationOverlay(QWidget):
     confirmed = Signal(str)   # Enter で確定されたとき（翻訳結果を渡す）
     cancelled = Signal()      # Esc でキャンセルされたとき
 
+    # グローバルキーから安全にUIスレッドへ通知するためのシグナル
+    _confirm_signal = Signal()
+    _cancel_signal = Signal()
+
     def __init__(self, opacity: float = 0.9, position: str = "cursor"):
         super().__init__()
         self._opacity = opacity
@@ -54,6 +81,14 @@ class TranslationOverlay(QWidget):
         self._loading_dots = 0
         self._loading_timer = QTimer(self)
         self._loading_timer.timeout.connect(self._update_loading)
+
+        # グローバルキーリスナー（オーバーレイ表示中のみ有効）
+        self._key_listener: pynput_keyboard.Listener | None = None
+        self._overlay_visible = False
+
+        # 内部シグナルを接続
+        self._confirm_signal.connect(self._do_confirm)
+        self._cancel_signal.connect(self._do_cancel)
 
         self._setup_window()
         self._setup_ui()
@@ -174,9 +209,7 @@ class TranslationOverlay(QWidget):
 
         self._position_window()
         self.adjustSize()
-        self.show()
-        self.activateWindow()
-        self.setFocus()
+        self._show_no_activate()
 
     def show_loading(self, original: str, engine_name: str, source_lang: str = "ja") -> None:
         """翻訳中の状態を表示する"""
@@ -194,7 +227,77 @@ class TranslationOverlay(QWidget):
 
         self._position_window()
         self.adjustSize()
+        self._show_no_activate()
+
+    def _show_no_activate(self) -> None:
+        """フォーカスを奪わずにウィンドウを最前面に表示する"""
+        # まず通常の show() で表示（WA_ShowWithoutActivating が効く）
         self.show()
+
+        # Win32 API で確実にフォーカスを奪わず最前面にする
+        if sys.platform == "win32":
+            hwnd = int(self.winId())
+            _user32.SetWindowPos(
+                hwnd,
+                HWND_TOPMOST,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+            )
+
+        # グローバルキーリスナーを開始
+        self._start_key_listener()
+
+    def _start_key_listener(self) -> None:
+        """オーバーレイ表示中のグローバルキーリスナーを開始する"""
+        # 既存のリスナーがあれば停止
+        self._stop_key_listener()
+
+        self._overlay_visible = True
+        self._key_listener = pynput_keyboard.Listener(
+            on_press=self._on_global_key_press,
+        )
+        self._key_listener.daemon = True
+        self._key_listener.start()
+
+    def _stop_key_listener(self) -> None:
+        """グローバルキーリスナーを停止する"""
+        self._overlay_visible = False
+        if self._key_listener is not None:
+            self._key_listener.stop()
+            self._key_listener = None
+
+    def _on_global_key_press(self, key) -> None:
+        """
+        グローバルキー入力のハンドラ（pynput スレッドから呼ばれる）。
+        オーバーレイ表示中のみ Enter/Esc を処理する。
+        """
+        if not self._overlay_visible:
+            return
+
+        try:
+            if key == pynput_keyboard.Key.enter:
+                # Enter: 確定（シグナル経由でUIスレッドへ）
+                if not self._is_loading:
+                    self._confirm_signal.emit()
+            elif key == pynput_keyboard.Key.esc:
+                # Esc: キャンセル（シグナル経由でUIスレッドへ）
+                self._cancel_signal.emit()
+        except AttributeError:
+            pass  # 特殊キー以外は無視
+
+    def _do_confirm(self) -> None:
+        """確定処理（UIスレッドで実行される）"""
+        self._loading_timer.stop()
+        self._stop_key_listener()
+        self.hide()
+        self.confirmed.emit(self._translated_text)
+
+    def _do_cancel(self) -> None:
+        """キャンセル処理（UIスレッドで実行される）"""
+        self._loading_timer.stop()
+        self._stop_key_listener()
+        self.hide()
+        self.cancelled.emit()
 
     def _update_loading(self) -> None:
         """ローディングアニメーションを更新する"""
@@ -239,17 +342,16 @@ class TranslationOverlay(QWidget):
                 self.move(x, y)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        """キー入力のハンドラ"""
+        """
+        キー入力のフォールバック。
+        フォーカスがある場合（ボーダーレス/ウィンドウモード時）にも対応。
+        グローバルホットキーと同じ処理をする。
+        """
         if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
-            # Enter: 確定
             if not self._is_loading:
-                self.hide()
-                self.confirmed.emit(self._translated_text)
+                self._do_confirm()
         elif event.key() == Qt.Key.Key_Escape:
-            # Esc: キャンセル
-            self._loading_timer.stop()
-            self.hide()
-            self.cancelled.emit()
+            self._do_cancel()
 
     def update_settings(self, opacity: float, position: str) -> None:
         """設定を更新する"""
