@@ -297,10 +297,15 @@ class ChatBridgeApp:
 def main():
     """エントリーポイント"""
     # --- 多重起動防止 ---
-    # Windows の名前付き Mutex を使用して、同じアプリの2重起動を防ぐ
-    mutex_name = "ChatBridge_SingleInstance_Mutex"
-    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
-    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+    # Windows の名前付き Mutex を使用して、同じアプリの2重起動を防ぐ。
+    # Global\ プレフィックスで管理者/通常権限の両方から見えるようにする。
+    # use_last_error=True で GetLastError の値を Python 側で正確に取得する。
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    mutex_name = "Global\\ChatBridge_SingleInstance_Mutex"
+    mutex = _kernel32.CreateMutexW(None, False, mutex_name)
+    last_error = ctypes.get_last_error()
+
+    if last_error == 183:  # ERROR_ALREADY_EXISTS
         # 既に起動中 → 簡易ダイアログを表示して終了
         app = QApplication(sys.argv)
         i18n.init("ja")
