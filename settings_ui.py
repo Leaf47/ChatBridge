@@ -324,6 +324,11 @@ class SettingsWindow(QWidget):
         self._setup_ui()
         self._load_settings()
 
+    def show(self) -> None:
+        """設定画面を表示する（毎回最新の設定を読み直す）"""
+        self._load_settings()
+        super().show()
+
     def _setup_window(self) -> None:
         """ウィンドウの属性を設定する"""
         self.setWindowTitle(t("settings_title"))
