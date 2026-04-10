@@ -726,8 +726,37 @@ class SettingsWindow(QWidget):
         if new_lang != old_lang:
             msg = QMessageBox()
             msg.setWindowTitle("ChatBridge")
-            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setIcon(QMessageBox.Icon.Question)
             msg.setText(t("lang_changed_restart"))
             msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            msg.addButton(QMessageBox.StandardButton.Ok)
+
+            restart_btn = msg.addButton(
+                t("lang_changed_restart_yes"), QMessageBox.ButtonRole.AcceptRole
+            )
+            later_btn = msg.addButton(
+                t("lang_changed_restart_no"), QMessageBox.ButtonRole.RejectRole
+            )
+            msg.setDefaultButton(restart_btn)
+
             msg.exec()
+
+            if msg.clickedButton() == restart_btn:
+                self._restart_app()
+
+    def _restart_app(self) -> None:
+        """アプリを管理者権限で再起動する"""
+        import ctypes
+        if getattr(sys, 'frozen', False):
+            exe = sys.executable
+            params = ""
+        else:
+            exe = sys.executable.replace("python.exe", "pythonw.exe")
+            script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
+            params = f'"{script}"'
+
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", exe, params, None, 1
+        )
+        # 現在のアプリを終了
+        from PySide6.QtWidgets import QApplication
+        QApplication.instance().quit()

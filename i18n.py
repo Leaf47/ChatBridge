@@ -108,7 +108,9 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "cancel": "キャンセル",
         "save_success": "設定を保存しました。",
         "save_fail": "設定の保存に失敗しました: {error}",
-        "lang_changed_restart": "表示言語が変更されました。\n変更を完全に反映するには、アプリを再起動してください。",
+        "lang_changed_restart": "表示言語が変更されました。\n変更を反映するには再起動が必要です。\n\n今すぐ再起動しますか？",
+        "lang_changed_restart_yes": "🔄 再起動する",
+        "lang_changed_restart_no": "後で",
 
         # --- オーバーレイ ---
         "overlay_loading": "翻訳中...",
@@ -221,7 +223,9 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "cancel": "Cancel",
         "save_success": "Settings saved.",
         "save_fail": "Failed to save settings: {error}",
-        "lang_changed_restart": "Display language has been changed.\nPlease restart the app to fully apply the change.",
+        "lang_changed_restart": "Display language has been changed.\nA restart is required to apply the change.\n\nRestart now?",
+        "lang_changed_restart_yes": "🔄 Restart",
+        "lang_changed_restart_no": "Later",
 
         # --- Overlay ---
         "overlay_loading": "Translating...",
