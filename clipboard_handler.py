@@ -20,6 +20,9 @@ VK_SHIFT = 0x10
 VK_ALT = 0x12
 VK_RETURN = 0x0D
 
+# Win32 API の関数
+user32 = ctypes.windll.user32
+
 
 class KEYBDINPUT(ctypes.Structure):
     """キーボード入力を表す Win32 構造体"""
@@ -57,7 +60,7 @@ def _send_key(vk_code: int, key_up: bool = False) -> None:
             dwExtraInfo=None,
         ),
     )
-    ctypes.windll.user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+    user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
 
 def _press_key(vk_code: int) -> None:
@@ -83,14 +86,21 @@ def _key_combo(modifier_vk: int, key_vk: int, delay: float = 0.05) -> None:
 
 
 def _release_all_modifiers() -> None:
-    """
-    すべての修飾キーをリリースする。
-    ホットキー（例: Ctrl+J）の後、ユーザーがまだ Ctrl を押している場合に
-    クリップボード操作と競合しないようにする。
-    """
+    """すべての修飾キーをリリースする。"""
     _release_key(VK_CONTROL)
     _release_key(VK_SHIFT)
     _release_key(VK_ALT)
+
+
+def _get_foreground_window() -> int:
+    """現在のフォアグラウンドウィンドウのハンドルを取得する"""
+    return user32.GetForegroundWindow()
+
+
+def _set_foreground_window(hwnd: int) -> None:
+    """指定したウィンドウをフォアグラウンドにする"""
+    if hwnd:
+        user32.SetForegroundWindow(hwnd)
 
 
 class ClipboardHandler:
@@ -98,33 +108,43 @@ class ClipboardHandler:
 
     def __init__(self):
         self._saved_clipboard: Optional[str] = None
+        self._target_hwnd: Optional[int] = None
 
     def grab_text(self) -> str:
         """
         アクティブウィンドウのテキスト入力欄からテキストを取得する。
 
         手順:
-        1. クリップボード内容を退避
-        2. 修飾キーをすべてリリース
-        3. まず Ctrl+C で選択中のテキストを取得
-        4. 選択がなければ Ctrl+A + Ctrl+C で全選択してコピー
+        1. フォアグラウンドウィンドウのハンドルを記録
+        2. クリップボード内容を退避
+        3. 修飾キーをすべてリリース
+        4. ターゲットウィンドウにフォーカスを確認
+        5. Ctrl+C で選択中のテキストを取得
+        6. 選択がなければ Ctrl+A + Ctrl+C で全選択
         """
+        # ホットキーが押された時点のフォアグラウンドウィンドウを記録
+        self._target_hwnd = _get_foreground_window()
+
         # クリップボードの内容を退避
         try:
             self._saved_clipboard = pyperclip.paste()
         except Exception:
             self._saved_clipboard = ""
 
-        # ユーザーがまだ修飾キーを押している可能性があるので、
-        # まず全ての修飾キーをリリースしてから操作開始
+        # ユーザーがまだ修飾キーを押している可能性があるのでリリース
         _release_all_modifiers()
-        time.sleep(0.15)
+        time.sleep(0.1)
+
+        # フォーカスがターゲットウィンドウにあることを確認
+        # （修飾キーリリースでフォーカスが移動する場合がある）
+        _set_foreground_window(self._target_hwnd)
+        time.sleep(0.1)
 
         # クリップボードをクリアして、コピー結果を判定できるようにする
         pyperclip.copy("")
         time.sleep(0.05)
 
-        # まず Ctrl+C で選択中のテキストだけを取得（全選択はしない）
+        # まず Ctrl+C で選択中のテキストだけを取得
         _key_combo(VK_CONTROL, 0x43)  # 0x43 = 'C'
         time.sleep(0.15)
 
@@ -148,14 +168,17 @@ class ClipboardHandler:
         return text.strip()
 
     def paste_text(self, text: str) -> None:
-        """
-        テキストをアクティブウィンドウにペーストする。
-        """
+        """テキストをアクティブウィンドウにペーストする。"""
         # 修飾キーを全てリリース
         _release_all_modifiers()
         time.sleep(0.05)
 
-        # Ctrl+A（全選択）
+        # ターゲットウィンドウにフォーカスを確認
+        if self._target_hwnd:
+            _set_foreground_window(self._target_hwnd)
+            time.sleep(0.1)
+
+        # Ctrl+A（全選択 — 元のテキストを上書きするため）
         _key_combo(VK_CONTROL, 0x41)
         time.sleep(0.05)
 
@@ -178,7 +201,6 @@ class ClipboardHandler:
         """退避しておいたクリップボード内容を復元する"""
         if self._saved_clipboard is not None:
             try:
-                # 少し待ってからクリップボードを復元
                 time.sleep(0.2)
                 pyperclip.copy(self._saved_clipboard)
             except Exception:
