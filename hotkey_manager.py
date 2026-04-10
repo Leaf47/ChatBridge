@@ -21,11 +21,11 @@ def parse_hotkey(hotkey_str: str) -> tuple[set, Optional[keyboard.KeyCode]]:
     """
     ホットキー文字列をパースして (修飾キーのセット, メインキー) を返す。
 
-    例: "ctrl+j" → ({Key.ctrl_l}, KeyCode(char='j'))
+    例: "alt+j" → ({Key.alt_l}, KeyCode(char='j'))
          "ctrl+shift+k" → ({Key.ctrl_l, Key.shift_l}, KeyCode(char='k'))
 
     Args:
-        hotkey_str: "ctrl+j" 形式のホットキー文字列
+        hotkey_str: "alt+j" 形式のホットキー文字列
 
     Returns:
         (修飾キーのセット, メインキー) のタプル
@@ -68,7 +68,7 @@ class HotkeyManager:
         ホットキーとコールバックを登録する。
 
         Args:
-            hotkey_str: "ctrl+j" 形式のホットキー文字列
+            hotkey_str: "alt+j" 形式のホットキー文字列
             callback: ホットキーが押されたときに呼ばれる関数
         """
         modifiers, main_key = parse_hotkey(hotkey_str)

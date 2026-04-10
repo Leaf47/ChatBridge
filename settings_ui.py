@@ -531,7 +531,7 @@ class SettingsWindow(QWidget):
     def _load_settings(self) -> None:
         """設定ファイルからUIに値を読み込む"""
         # ホットキー
-        self._hotkey_input._hotkey = self._config.get("hotkey_translate", "ctrl+j")
+        self._hotkey_input._hotkey = self._config.get("hotkey_translate", "alt+j")
         self._hotkey_input.setText(self._hotkey_input._hotkey)
 
         # オーバーレイ位置

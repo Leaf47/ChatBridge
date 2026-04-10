@@ -77,7 +77,7 @@ class ChatBridgeApp:
         # ホットキーマネージャー
         self._hotkey_manager = HotkeyManager()
         self._hotkey_manager.register(
-            self._config.get("hotkey_translate", "ctrl+j"),
+            self._config.get("hotkey_translate", "alt+j"),
             self._on_translate_hotkey,
         )
 
@@ -184,7 +184,7 @@ class ChatBridgeApp:
         self._hotkey_manager.stop()
         self._hotkey_manager = HotkeyManager()
         self._hotkey_manager.register(
-            self._config.get("hotkey_translate", "ctrl+j"),
+            self._config.get("hotkey_translate", "alt+j"),
             self._on_translate_hotkey,
         )
         self._hotkey_manager.start()

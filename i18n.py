@@ -54,7 +54,7 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         # 一般タブ
         "general_hotkey_group": "⌨️ ホットキー設定",
         "general_hotkey_label": "翻訳ホットキー:",
-        "general_hotkey_hint": "例: ctrl+j, ctrl+shift+t, f2",
+        "general_hotkey_hint": "例: alt+j, ctrl+shift+t, f2",
         "general_auto_paste": "翻訳結果を自動ペースト（確認なし）",
         "general_auto_start": "Windows 起動時に自動的に開く",
         "general_ui_lang_group": "🌐 表示言語",
@@ -149,7 +149,7 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         # General Tab
         "general_hotkey_group": "⌨️ Hotkey Settings",
         "general_hotkey_label": "Translation Hotkey:",
-        "general_hotkey_hint": "e.g. ctrl+j, ctrl+shift+t, f2",
+        "general_hotkey_hint": "e.g. alt+j, ctrl+shift+t, f2",
         "general_auto_paste": "Auto-paste translation (no confirmation)",
         "general_auto_start": "Launch on Windows startup",
         "general_ui_lang_group": "🌐 Display Language",

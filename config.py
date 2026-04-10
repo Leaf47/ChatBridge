@@ -17,7 +17,7 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 # デフォルト設定
 DEFAULT_CONFIG = {
     # ホットキー
-    "hotkey_translate": "ctrl+j",
+    "hotkey_translate": "alt+j",
 
     # 翻訳エンジン（mymemory / deepl / google）
     "translator": "mymemory",
