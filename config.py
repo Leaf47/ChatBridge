@@ -44,6 +44,9 @@ DEFAULT_CONFIG = {
     # 初回セットアップ完了フラグ（初回起動ダイアログ表示後に True になる）
     "setup_complete": False,
 
+    # 言語選択済みフラグ（言語選択ダイアログ表示後に True になる）
+    "lang_selected": False,
+
     # Windows 起動時に自動起動（タスクスケジューラで管理者権限起動）
     "auto_start": False,
 

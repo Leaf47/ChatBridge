@@ -310,9 +310,9 @@ def main():
     i18n.init(ui_lang)
 
     # --- 初回起動: 言語選択 ---
-    # setup_complete が False のときは、管理者チェックより先に言語を決める。
+    # lang_selected が False のときは、管理者チェックより先に言語を決める。
     # こうすることで管理者チェックのダイアログも正しい言語で表示できる。
-    if config and config.is_first_launch:
+    if config and not config.get("lang_selected", False):
         lang_msg = QMessageBox()
         lang_msg.setWindowTitle("ChatBridge — Language / 言語")
         lang_msg.setIcon(QMessageBox.Icon.Question)
@@ -334,6 +334,7 @@ def main():
 
         # 選択した言語を保存して i18n を再初期化
         config.set("ui_lang", chosen_lang)
+        config.set("lang_selected", True)
         config.save()
         i18n.init(chosen_lang)
 
