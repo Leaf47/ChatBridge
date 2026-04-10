@@ -65,13 +65,13 @@ class UIBridge(QObject):
 class ChatBridgeApp:
     """ChatBridge アプリケーションのメインクラス"""
 
-    def __init__(self):
-        # Qt アプリケーション
-        self._app = QApplication(sys.argv)
+    def __init__(self, app: QApplication, config: Config):
+        # Qt アプリケーション（main() で作成済みのインスタンスを使用）
+        self._app = app
         self._app.setQuitOnLastWindowClosed(False)
 
-        # 設定の読み込み
-        self._config = Config()
+        # 設定（main() で読み込み済み）
+        self._config = config
 
         # i18n 初期化（設定の ui_lang に基づく）
         i18n.init(self._config.get("ui_lang", "ja"))
@@ -296,18 +296,49 @@ class ChatBridgeApp:
 
 def main():
     """エントリーポイント"""
-    # 管理者権限チェック（ゲーム上でのキー入力シミュレーションに必須）
+    # 最低限の Qt を初期化
+    app = QApplication(sys.argv)
+
+    # 設定の読み込み（config.json がなければ作成される）
+    try:
+        config = Config()
+    except Exception:
+        config = None
+
+    # i18n を初期化
+    ui_lang = config.get("ui_lang", "ja") if config else "ja"
+    i18n.init(ui_lang)
+
+    # --- 初回起動: 言語選択 ---
+    # setup_complete が False のときは、管理者チェックより先に言語を決める。
+    # こうすることで管理者チェックのダイアログも正しい言語で表示できる。
+    if config and config.is_first_launch:
+        lang_msg = QMessageBox()
+        lang_msg.setWindowTitle("ChatBridge — Language / 言語")
+        lang_msg.setIcon(QMessageBox.Icon.Question)
+        lang_msg.setText("🌐 Select your language / 言語を選択してください")
+        lang_msg.setWindowFlags(
+            lang_msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
+        )
+
+        ja_btn = lang_msg.addButton("日本語", QMessageBox.ButtonRole.AcceptRole)
+        en_btn = lang_msg.addButton("English", QMessageBox.ButtonRole.AcceptRole)
+        lang_msg.setDefaultButton(ja_btn)
+
+        lang_msg.exec()
+
+        if lang_msg.clickedButton() == en_btn:
+            chosen_lang = "en"
+        else:
+            chosen_lang = "ja"
+
+        # 選択した言語を保存して i18n を再初期化
+        config.set("ui_lang", chosen_lang)
+        config.save()
+        i18n.init(chosen_lang)
+
+    # --- 管理者権限チェック ---
     if not _is_admin():
-        # 最低限の Qt を初期化してダイアログを表示
-        app = QApplication(sys.argv)
-
-        # i18n を初期化（config がなくてもデフォルト言語で表示）
-        try:
-            config = Config()
-            i18n.init(config.get("ui_lang", "ja"))
-        except Exception:
-            i18n.init("ja")
-
         msg = QMessageBox()
         msg.setWindowTitle("ChatBridge")
         msg.setIcon(QMessageBox.Icon.Warning)
@@ -330,9 +361,10 @@ def main():
 
         sys.exit(0)
 
+    # --- 通常起動（管理者権限あり） ---
     try:
-        app = ChatBridgeApp()
-        sys.exit(app.run())
+        chatbridge = ChatBridgeApp(app, config)
+        sys.exit(chatbridge.run())
     except KeyboardInterrupt:
         print(f"\n{t('shut_down')}")
         sys.exit(0)
