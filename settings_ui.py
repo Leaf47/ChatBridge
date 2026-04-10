@@ -21,9 +21,7 @@ import sys
 import os
 
 
-# Windows レジストリでの自動起動管理
-_REGISTRY_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-_APP_NAME = "ChatBridge"
+# タスクスケジューラでの自動起動管理（管理者権限で自動起動）
 _TASK_NAME = "ChatBridge"
 
 
@@ -36,34 +34,6 @@ def _get_exe_path() -> str:
         script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
         return f'"{exe_path}" "{script_path}"'
 
-
-def _get_auto_start() -> bool:
-    """レジストリから自動起動設定を読み取る"""
-    try:
-        import winreg
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY, 0, winreg.KEY_READ)
-        winreg.QueryValueEx(key, _APP_NAME)
-        winreg.CloseKey(key)
-        return True
-    except (FileNotFoundError, OSError):
-        return False
-
-
-def _set_auto_start(enabled: bool) -> None:
-    """レジストリに自動起動設定を書き込む（通常権限）"""
-    try:
-        import winreg
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY, 0, winreg.KEY_SET_VALUE)
-        if enabled:
-            winreg.SetValueEx(key, _APP_NAME, 0, winreg.REG_SZ, _get_exe_path())
-        else:
-            try:
-                winreg.DeleteValue(key, _APP_NAME)
-            except FileNotFoundError:
-                pass
-        winreg.CloseKey(key)
-    except OSError:
-        pass
 
 
 def _get_auto_start_admin() -> bool:
@@ -455,17 +425,7 @@ class SettingsWindow(QWidget):
         startup_layout.setSpacing(6)
 
         self._auto_start_check = QCheckBox(t("general_auto_start"))
-        self._auto_start_check.stateChanged.connect(self._on_auto_start_changed)
         startup_layout.addWidget(self._auto_start_check)
-
-        # 管理者権限チェック（auto_startの子オプション、インデントで子要素感を出す）
-        admin_container = QWidget()
-        admin_layout = QHBoxLayout(admin_container)
-        admin_layout.setContentsMargins(26, 0, 0, 0)
-        self._auto_start_admin_check = QCheckBox(t("general_auto_start_admin"))
-        self._auto_start_admin_check.setEnabled(False)
-        admin_layout.addWidget(self._auto_start_admin_check)
-        startup_layout.addWidget(admin_container)
 
         auto_start_hint = QLabel(t("general_auto_start_hint"))
         auto_start_hint.setStyleSheet("color: #6b7280; font-size: 11px; padding: 2px 0 0 28px;")
@@ -604,12 +564,6 @@ class SettingsWindow(QWidget):
         scroll.setWidget(tab)
         return scroll
 
-    def _on_auto_start_changed(self, state) -> None:
-        """自動起動チェックの状態が変わったとき、管理者権限チェックの有効/無効を連動する"""
-        enabled = self._auto_start_check.isChecked()
-        self._auto_start_admin_check.setEnabled(enabled)
-        if not enabled:
-            self._auto_start_admin_check.setChecked(False)
 
     def _swap_languages(self) -> None:
         """翻訳元と翻訳先を入れ替える"""
@@ -669,13 +623,9 @@ class SettingsWindow(QWidget):
 
         # 自動起動（config の保存値から読み込む）
         auto_start = self._config.get("auto_start", False)
-        auto_start_admin = self._config.get("auto_start_admin", False)
         self._auto_start_check.setChecked(auto_start)
-        self._auto_start_admin_check.setChecked(auto_start_admin)
-        self._auto_start_admin_check.setEnabled(auto_start)
         # 保存時の差分検出用に初期値を記録
         self._initial_auto_start = auto_start
-        self._initial_auto_start_admin = auto_start_admin
 
         # UI言語
         ui_lang = self._config.get("ui_lang", "ja")
@@ -728,42 +678,20 @@ class SettingsWindow(QWidget):
         # 即ペースト
         self._config.set("auto_paste", self._auto_paste_check.isChecked())
 
-        # 自動起動（変更があった場合のみ操作する）
+        # 自動起動（変更があった場合のみタスクスケジューラを操作）
         auto_start = self._auto_start_check.isChecked()
-        auto_start_admin = self._auto_start_admin_check.isChecked()
         self._config.set("auto_start", auto_start)
-        self._config.set("auto_start_admin", auto_start_admin)
 
-        # 設定が実際に変更された場合のみレジストリ/タスクスケジューラを操作
-        changed = (
-            auto_start != self._initial_auto_start
-            or auto_start_admin != self._initial_auto_start_admin
-        )
-        if changed:
-            if auto_start and auto_start_admin:
-                # タスクスケジューラで管理者権限自動起動
-                _set_auto_start(False)
-                success = _set_auto_start_admin(True)
-                if not success:
-                    QMessageBox.warning(
-                        self, "⚠️",
-                        t("general_auto_start_admin_fail"),
-                    )
-                    self._auto_start_admin_check.setChecked(False)
-            elif auto_start:
-                # レジストリで通常権限自動起動
-                if self._initial_auto_start_admin:
-                    _set_auto_start_admin(False)
-                _set_auto_start(True)
-            else:
-                # 両方削除
-                if self._initial_auto_start:
-                    _set_auto_start(False)
-                if self._initial_auto_start_admin:
-                    _set_auto_start_admin(False)
-            # 初期値を更新
-            self._initial_auto_start = auto_start
-            self._initial_auto_start_admin = auto_start_admin
+        if auto_start != self._initial_auto_start:
+            success = _set_auto_start_admin(auto_start)
+            if auto_start and not success:
+                QMessageBox.warning(
+                    self, "⚠️",
+                    t("general_auto_start_admin_fail"),
+                )
+                self._auto_start_check.setChecked(False)
+                self._config.set("auto_start", False)
+            self._initial_auto_start = self._auto_start_check.isChecked()
 
         # UI言語
         self._config.set("ui_lang", self._ui_lang_combo.currentData())

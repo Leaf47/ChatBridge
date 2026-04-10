@@ -57,8 +57,7 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "general_hotkey_hint": "例: alt+j, ctrl+shift+t, f2",
         "general_auto_paste": "翻訳結果を自動ペースト（確認なし）",
         "general_auto_start": "Windows 起動時に自動的に開く",
-        "general_auto_start_hint": "※ 通常: レジストリ / 管理者: タスクスケジューラを使用",
-        "general_auto_start_admin": "管理者権限で起動する（ゲーム動作に必要）",
+        "general_auto_start_hint": "※ タスクスケジューラを使用（管理者権限で自動起動）",
         "general_auto_start_admin_fail": "管理者権限での自動起動の登録に失敗しました。\nUACプロンプトで「はい」を選択してください。",
         "general_ui_lang_group": "🌐 表示言語",
         "general_ui_lang_label": "言語:",
@@ -92,13 +91,16 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         # 初回起動ダイアログ
         "first_launch_title": "初回セットアップ",
         "first_launch_text": "🎉 ChatBridge へようこそ！",
-        "first_launch_detail": "原神などのゲームで使用するには、管理者権限での起動が必要です。\n\nWindows 起動時に管理者権限で自動起動するように設定しますか？\n（タスクスケジューラを使用 — UACは今回のみ表示されます）",
+        "first_launch_detail": "Windows 起動時に管理者権限で自動起動するように設定しますか？\n（タスクスケジューラを使用 — UACは今回のみ表示されます）",
         "first_launch_yes": "✅ はい（推奨）",
         "first_launch_later": "後で設定する",
         "first_launch_success": "管理者権限での自動起動を登録しました。\n次回のWindows起動時から自動で起動します。",
-        "first_launch_restart": "ゲームですぐ使えるように、\n今すぐ管理者権限で再起動しますか？",
-        "first_launch_restart_yes": "🔄 再起動する",
-        "first_launch_restart_no": "このまま使う",
+
+        # 管理者権限チェックダイアログ
+        "admin_required_title": "⚠️ 管理者権限が必要です",
+        "admin_required_detail": "ChatBridge はゲーム上でのキー入力シミュレーションのために\n管理者権限での実行が必要です。\n\n管理者権限で再起動しますか？",
+        "admin_required_relaunch": "🔄 管理者権限で再起動",
+        "admin_required_quit": "❌ 終了",
 
         # 保存・キャンセル
         "save": "💾 保存",
@@ -166,8 +168,7 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "general_hotkey_hint": "e.g. alt+j, ctrl+shift+t, f2",
         "general_auto_paste": "Auto-paste translation (no confirmation)",
         "general_auto_start": "Launch on Windows startup",
-        "general_auto_start_hint": "* Normal: Registry / Admin: Task Scheduler",
-        "general_auto_start_admin": "Run as administrator (required for games)",
+        "general_auto_start_hint": "* Uses Task Scheduler (auto-start with admin privileges)",
         "general_auto_start_admin_fail": "Failed to register admin auto-start.\nPlease select 'Yes' in the UAC prompt.",
         "general_ui_lang_group": "🌐 Display Language",
         "general_ui_lang_label": "Language:",
@@ -201,13 +202,16 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         # First Launch Dialog
         "first_launch_title": "First-Time Setup",
         "first_launch_text": "🎉 Welcome to ChatBridge!",
-        "first_launch_detail": "To use with games like Genshin Impact, administrator privileges are required.\n\nWould you like to set up auto-start with administrator privileges on Windows startup?\n(Uses Task Scheduler — UAC will only be shown this time)",
+        "first_launch_detail": "Would you like to set up auto-start with administrator privileges on Windows startup?\n(Uses Task Scheduler — UAC will only be shown this time)",
         "first_launch_yes": "✅ Yes (Recommended)",
         "first_launch_later": "Set up later",
         "first_launch_success": "Admin auto-start has been registered.\nChatBridge will auto-launch on next Windows startup.",
-        "first_launch_restart": "Would you like to restart with administrator privileges now\nso you can use it with games right away?",
-        "first_launch_restart_yes": "🔄 Restart now",
-        "first_launch_restart_no": "Continue without restart",
+
+        # Admin Required Dialog
+        "admin_required_title": "⚠️ Administrator Privileges Required",
+        "admin_required_detail": "ChatBridge requires administrator privileges\nfor keyboard input simulation in games.\n\nWould you like to restart with administrator privileges?",
+        "admin_required_relaunch": "🔄 Restart as Administrator",
+        "admin_required_quit": "❌ Quit",
 
         # Save / Cancel
         "save": "💾 Save",

@@ -41,11 +41,8 @@ DEFAULT_CONFIG = {
     # 確認なしで即ペーストするか
     "auto_paste": False,
 
-    # Windows 起動時に自動起動
+    # Windows 起動時に自動起動（タスクスケジューラで管理者権限起動）
     "auto_start": False,
-
-    # 管理者権限で自動起動（タスクスケジューラ使用）
-    "auto_start_admin": False,
 
     # MyMemory メールアドレス（設定すると1日5,000文字→50,000文字に増加）
     "mymemory_email": "",

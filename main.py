@@ -3,11 +3,13 @@ ChatBridge — チャット翻訳ツール
 
 メインエントリーポイント。
 すべてのコンポーネントを初期化し、アプリケーションのイベントループを開始する。
+管理者権限での実行が必須（ゲーム上でのキー入力シミュレーションに必要）。
 """
 
 import sys
 import os
 import signal
+import ctypes
 import threading
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QTimer, Qt, Slot, Signal, QObject
@@ -21,6 +23,32 @@ from clipboard_handler import ClipboardHandler
 from overlay import TranslationOverlay
 from settings_ui import SettingsWindow, _set_auto_start_admin
 from tray_app import TrayApp
+
+
+def _is_admin() -> bool:
+    """現在のプロセスが管理者権限で実行されているかチェックする"""
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except Exception:
+        return False
+
+
+def _relaunch_as_admin() -> None:
+    """管理者権限でアプリを再起動する（UACプロンプト表示）"""
+    if getattr(sys, 'frozen', False):
+        # exe の場合
+        exe = sys.executable
+        params = ""
+    else:
+        # 開発時: pythonw.exe を使ってコンソールウィンドウを出さない
+        exe = sys.executable.replace("python.exe", "pythonw.exe")
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
+        params = f'"{script}"'
+
+    # ShellExecuteW で管理者昇格して起動（UACプロンプト表示）
+    ctypes.windll.shell32.ShellExecuteW(
+        None, "runas", exe, params, None, 1  # 1 = SW_SHOWNORMAL
+    )
 
 
 class UIBridge(QObject):
@@ -106,7 +134,7 @@ class ChatBridgeApp:
         print(t("tray_notice"))
         print(t("exit_hint"))
 
-        # 初回起動時にセットアップダイアログを表示
+        # 初回起動時に自動起動登録ダイアログを表示
         if self._config.is_first_launch:
             QTimer.singleShot(500, self._show_first_launch_dialog)
 
@@ -174,7 +202,7 @@ class ChatBridgeApp:
         self._clipboard.restore_original()
 
     def _show_first_launch_dialog(self) -> None:
-        """初回起動時のセットアップダイアログを表示する"""
+        """初回起動時のセットアップダイアログを表示する（自動起動登録のみ）"""
         msg = QMessageBox()
         msg.setWindowTitle("ChatBridge — " + t("first_launch_title"))
         msg.setIcon(QMessageBox.Icon.Information)
@@ -194,53 +222,16 @@ class ChatBridgeApp:
             success = _set_auto_start_admin(True)
             if success:
                 self._config.set("auto_start", True)
-                self._config.set("auto_start_admin", True)
                 self._config.save()
-                # 管理者権限で再起動するか確認
-                restart_msg = QMessageBox()
-                restart_msg.setWindowTitle("ChatBridge")
-                restart_msg.setIcon(QMessageBox.Icon.Question)
-                restart_msg.setText(t("first_launch_success"))
-                restart_msg.setInformativeText(t("first_launch_restart"))
-                restart_msg.setWindowFlags(
-                    restart_msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
+                QMessageBox.information(
+                    None, "✅ ChatBridge",
+                    t("first_launch_success"),
                 )
-                restart_yes = restart_msg.addButton(
-                    t("first_launch_restart_yes"), QMessageBox.ButtonRole.AcceptRole
-                )
-                restart_no = restart_msg.addButton(
-                    t("first_launch_restart_no"), QMessageBox.ButtonRole.RejectRole
-                )
-                restart_msg.setDefaultButton(restart_yes)
-                restart_msg.exec()
-
-                if restart_msg.clickedButton() == restart_yes:
-                    self._relaunch_as_admin()
             else:
                 QMessageBox.warning(
                     None, "⚠️ ChatBridge",
                     t("general_auto_start_admin_fail"),
                 )
-
-    def _relaunch_as_admin(self) -> None:
-        """管理者権限でアプリを再起動し、現プロセスを終了する"""
-        import ctypes
-        if getattr(sys, 'frozen', False):
-            # exe の場合（--noconsole でビルドしていればコンソール不要）
-            exe = sys.executable
-            params = ""
-        else:
-            # 開発時: pythonw.exe を使ってコンソールウィンドウを出さない
-            exe = sys.executable.replace("python.exe", "pythonw.exe")
-            script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
-            params = f'"{script}"'
-
-        # ShellExecuteW で管理者昇格して起動（UACプロンプト表示）
-        ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", exe, params, None, 1  # 1 = SW_SHOWNORMAL
-        )
-        # 現プロセスを終了
-        self._do_quit()
 
     def _show_settings(self) -> None:
         """設定画面を表示する（シグナル経由でUIスレッドで実行）"""
@@ -302,6 +293,40 @@ class ChatBridgeApp:
 
 def main():
     """エントリーポイント"""
+    # 管理者権限チェック（ゲーム上でのキー入力シミュレーションに必須）
+    if not _is_admin():
+        # 最低限の Qt を初期化してダイアログを表示
+        app = QApplication(sys.argv)
+
+        # i18n を初期化（config がなくてもデフォルト言語で表示）
+        try:
+            config = Config()
+            i18n.init(config.get("ui_lang", "ja"))
+        except Exception:
+            i18n.init("ja")
+
+        msg = QMessageBox()
+        msg.setWindowTitle("ChatBridge")
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setText(t("admin_required_title"))
+        msg.setInformativeText(t("admin_required_detail"))
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+
+        relaunch_btn = msg.addButton(
+            t("admin_required_relaunch"), QMessageBox.ButtonRole.AcceptRole
+        )
+        quit_btn = msg.addButton(
+            t("admin_required_quit"), QMessageBox.ButtonRole.RejectRole
+        )
+        msg.setDefaultButton(relaunch_btn)
+
+        msg.exec()
+
+        if msg.clickedButton() == relaunch_btn:
+            _relaunch_as_admin()
+
+        sys.exit(0)
+
     try:
         app = ChatBridgeApp()
         sys.exit(app.run())
