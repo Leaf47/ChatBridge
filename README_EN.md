@@ -65,6 +65,14 @@ No installer required — it does not modify the registry or system folders.
 
 ### First Launch
 
+> **🛡️ Windows SmartScreen Warning**
+>
+> On first launch, you may see a "Windows protected your PC" warning.
+> This is a standard warning for unsigned software from individual developers — it is not a virus.
+>
+> Click "**More info**" → then click "**Run anyway**" to proceed.
+> (This warning will not appear again after the first launch.)
+
 1. Double-click `ChatBridge.exe` (or right-click → "Run as administrator")
 2. Select your language (日本語 / English)
 3. If admin privileges are required, an elevation dialog will appear automatically
