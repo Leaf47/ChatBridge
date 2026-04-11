@@ -62,7 +62,7 @@ ChatBridge は、ゲーム中のチャットをリアルタイムで翻訳する
 |---|---|
 | 表示位置 | カーソル位置 / 画面中央 / 右上（選択可能） |
 | 不透明度 | 30%〜100%（スライダーで調整） |
-| フォーカス | ゲームのフォーカスを奪わない（WindowDoesNotAcceptFocus） |
+| フォーカス | ゲームのフォーカスを奪わない（WA_ShowWithoutActivating + SWP_NOACTIVATE） |
 | 操作 | `Enter` → 翻訳結果をペースト、`Esc` → キャンセル |
 | 自動ペースト | オプションで確認なしの即ペーストが可能 |
 
@@ -70,8 +70,14 @@ ChatBridge は、ゲーム中のチャットをリアルタイムで翻訳する
 - `WindowStaysOnTopHint` — 最前面表示
 - `FramelessWindowHint` — フレームなし
 - `Tool` — タスクバーに表示しない
-- `WindowDoesNotAcceptFocus` — フォーカスを奪わない
-- `WindowTransparentForInput`（ローディング中のみ）— 入力を透過
+- `WA_ShowWithoutActivating` — 表示時にフォーカスを取らない
+- `WA_TranslucentBackground` — 半透明背景
+
+**Enter/Esc キーの処理:**
+
+オーバーレイはフォーカスを持たないため、Qt の `keyPressEvent` だけでは Enter/Esc を検出できない。
+そのため、HotkeyManager の統合キーボードリスナー（pynput）の `win32_event_filter` を経由してキー入力を受け取る。
+詳細は「4.1 キーボードフックアーキテクチャ」を参照。
 
 ### 2.4 システムトレイ
 
@@ -219,6 +225,78 @@ class UIBridge(QObject):
     show_overlay_result = Signal(str, str, str, str, str)
     quit_signal = Signal()
 ```
+
+### 4.1 キーボードフックアーキテクチャ
+
+> ⚠️ **重要な設計制約**: pynput の `keyboard.Listener` はアプリ全体で **1つだけ** 使用する。
+> 複数のリスナーを同時に起動してはならない。
+
+#### なぜリスナーは1つに限定するのか
+
+pynput の `keyboard.Listener` は Windows の低レベルキーボードフック（`SetWindowsHookEx`）を使用する。
+以下の理由から、複数リスナーの同時起動は禁止される：
+
+1. **suppress_event() の排他性**: `win32_event_filter` 内で `suppress_event()` を呼ぶと、そのキーイベントは OS の入力ストリームから完全に除去される。別のリスナーにもイベントが届かなくなる。
+2. **on_press の非発火**: `suppress_event()` を呼んだリスナー自身の `on_press` コールバックも発火しなくなる（pynput の既知の動作）。
+3. **フックチェーンの競合**: 複数のフックが同じキーに対して競合すると、処理順序が不定になり、予測不能な動作を引き起こす。
+
+#### 統合アーキテクチャ
+
+```
+┌─────────────────────────────────────────────────────┐
+│              HotkeyManager（唯一のリスナー）           │
+│                                                     │
+│  keyboard.Listener                                  │
+│  ├── win32_event_filter ──┐                         │
+│  │                        ├─ オーバーレイ非表示時:    │
+│  │                        │   全キーをそのまま通過    │
+│  │                        │                         │
+│  │                        ├─ オーバーレイ表示中:      │
+│  │                        │   Enter/Esc →            │
+│  │                        │     suppress_event()     │
+│  │                        │     + overlay.handle_key()│
+│  │                        │   その他 → そのまま通過   │
+│  │                        │                         │
+│  ├── on_press ────────────┤                         │
+│  │   （suppress されなかった │                         │
+│  │     キーのみ到達）       │                         │
+│  │   ホットキー照合 → コールバック実行               │
+│  │                                                  │
+│  └── on_release ──────── 押下キーの追跡解除          │
+└─────────────────────────────────────────────────────┘
+         │
+         │ overlay.handle_key(vk_code)
+         │ （別スレッドから呼ばれる）
+         ▼
+┌─────────────────────────────────────────────────────┐
+│              TranslationOverlay                      │
+│                                                     │
+│  handle_key(vk_code)                                │
+│  ├── VK_RETURN → _confirm_signal.emit()             │
+│  └── VK_ESCAPE → _cancel_signal.emit()              │
+│                                                     │
+│  ※ Signal 経由で UI スレッドにディスパッチ           │
+│  ※ overlay 自身は pynput Listener を持たない         │
+└─────────────────────────────────────────────────────┘
+```
+
+#### 処理フロー（オーバーレイ表示中に Enter を押した場合）
+
+1. ユーザーが Enter キーを押下
+2. Windows が低レベルキーボードフックを呼び出す
+3. `HotkeyManager._win32_key_filter()` が実行される
+4. `overlay.overlay_visible` が `True` なので、Enter キーを検出
+5. `suppress_event()` でゲームにキーが届かないよう抑制
+6. `WM_KEYDOWN` メッセージの場合のみ `overlay.handle_key(VK_RETURN)` を呼ぶ
+7. overlay が `_confirm_signal.emit()` で UI スレッドに通知
+8. UI スレッドで `_do_confirm()` → 翻訳結果をペースト、オーバーレイを非表示
+
+#### 開発時の注意事項
+
+- **pynput Listener の新規作成禁止**: 新しい機能で `keyboard.Listener` を追加しない。HotkeyManager のリスナーに統合すること。
+- **suppress_event() は例外を raise する**: `suppress_event()` は内部で `SuppressException` を raise することでキーイベントを抑制する。**suppress_event() の後に書いたコードは実行されない**。抑制するキーの処理は必ず `suppress_event()` **より前**に行うこと。
+- **suppress_event() と on_press の非互換**: `suppress_event()` を呼んだキーは `on_press` に到達しない。抑制するキーの処理は必ず `win32_event_filter` 内で行うこと。
+- **UI スレッドセーフティ**: `win32_event_filter` はリスナースレッド（非UIスレッド）から呼ばれる。Qt ウィジェットの直接操作は禁止。Signal 経由でディスパッチすること。
 
 ---
 

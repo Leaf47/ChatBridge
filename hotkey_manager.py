@@ -2,10 +2,12 @@
 グローバルホットキー管理モジュール
 
 pynput を使ってゲーム中でも動作するグローバルホットキーを検出する。
+pynput のリスナーはアプリ全体で一つだけ使用する（複数リスナーの競合を避けるため）。
+オーバーレイ表示中の Enter/Esc の抑制もこのリスナーで統合的に処理する。
 """
 
 import threading
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
 from pynput import keyboard
 
 
@@ -53,7 +55,16 @@ def parse_hotkey(hotkey_str: str) -> tuple[set, Optional[keyboard.KeyCode]]:
 
 
 class HotkeyManager:
-    """グローバルホットキーの登録・検出を管理するクラス"""
+    """
+    グローバルホットキーの登録・検出を管理するクラス。
+
+    アプリ全体で唯一の pynput Listener を管理し、
+    ホットキー検出とオーバーレイのキー処理を統合する。
+    """
+
+    # WM_KEYDOWN のメッセージコード（キー押下時のみ処理するため）
+    _WM_KEYDOWN = 0x0100
+    _WM_SYSKEYDOWN = 0x0104
 
     def __init__(self):
         self._listener: Optional[keyboard.Listener] = None
@@ -62,6 +73,8 @@ class HotkeyManager:
         self._pressed_keys: set = set()
         self._enabled: bool = True
         self._lock = threading.Lock()
+        # オーバーレイへの参照（Enter/Esc の抑制と通知用）
+        self._overlay = None
 
     def register(self, hotkey_str: str, callback: Callable) -> None:
         """
@@ -85,6 +98,13 @@ class HotkeyManager:
         self.unregister(old_hotkey)
         self.register(new_hotkey, callback)
 
+    def set_overlay(self, overlay) -> None:
+        """
+        オーバーレイへの参照を設定する。
+        オーバーレイ表示中に Enter/Esc を抑制して overlay に通知するために必要。
+        """
+        self._overlay = overlay
+
     def set_enabled(self, enabled: bool) -> None:
         """ホットキーの有効/無効を切り替える"""
         self._enabled = enabled
@@ -97,6 +117,7 @@ class HotkeyManager:
         self._listener = keyboard.Listener(
             on_press=self._on_press,
             on_release=self._on_release,
+            win32_event_filter=self._win32_key_filter,
         )
         self._listener.daemon = True
         self._listener.start()
@@ -113,6 +134,8 @@ class HotkeyManager:
         if not self._enabled:
             return
 
+        # オーバーレイ表示中の Enter/Esc は win32_event_filter で処理済みなので、
+        # ここではホットキーの照合のみ行う
         with self._lock:
             # 修飾キーの正規化（左右を区別しない）
             normalized = self._normalize_key(key)
@@ -168,3 +191,31 @@ class HotkeyManager:
                 return keyboard.KeyCode.from_char(key.char.lower())
 
         return key
+
+    def _win32_key_filter(self, msg, data) -> None:
+        """
+        Win32 低レベルキーボードフック用フィルタ。
+
+        オーバーレイ表示中に Enter/Esc キーをゲームに届かないよう抑制し、
+        overlay にキー入力を通知する。その他のキーはそのまま通過させる。
+
+        重要: suppress_event() は SuppressException を raise するため、
+        その後のコードは実行されない。overlay.handle_key() は必ず
+        suppress_event() より前に呼ぶこと。
+        """
+        # オーバーレイが未設定または非表示なら何もしない
+        if self._overlay is None or not self._overlay.overlay_visible:
+            return
+
+        from overlay import TranslationOverlay
+        vk = data.vkCode
+
+        if vk in (TranslationOverlay.VK_RETURN, TranslationOverlay.VK_ESCAPE):
+            # キー押下時のみ overlay に通知（キーリリース時は抑制のみ）
+            if msg in (self._WM_KEYDOWN, self._WM_SYSKEYDOWN):
+                self._overlay.handle_key(vk)
+
+            # ゲームにキーを届かないように抑制
+            # ※ SuppressException が raise されるため、これ以降のコードは実行されない
+            self._listener.suppress_event()
+

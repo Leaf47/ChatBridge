@@ -6,11 +6,11 @@ Enter で翻訳結果を確定、Esc でキャンセル。
 
 フルスクリーンゲーム対応:
   - ウィンドウのフォーカスを奪わない（SWP_NOACTIVATE）
-  - Enter/Esc はグローバルホットキー（pynput）で処理する
+  - Enter/Esc は HotkeyManager の統合リスナーで処理する
+    （pynput の複数リスナー競合を避けるため）
 """
 
 import sys
-import threading
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 )
@@ -21,7 +21,6 @@ from PySide6.QtGui import (
 )
 
 from i18n import t
-
 # Win32 API を使用してフォーカスを奪わずに最前面表示する
 if sys.platform == "win32":
     import ctypes
@@ -35,9 +34,6 @@ if sys.platform == "win32":
     SWP_NOMOVE = 0x0002
     SWP_NOSIZE = 0x0001
     SWP_SHOWWINDOW = 0x0040
-
-# pynput でグローバルキー入力を監視（オーバーレイ表示中のみ）
-from pynput import keyboard as pynput_keyboard
 
 
 # 言語コード → 表示ラベル（オーバーレイに表示する）
@@ -70,6 +66,10 @@ class TranslationOverlay(QWidget):
     _confirm_signal = Signal()
     _cancel_signal = Signal()
 
+    # HotkeyManager から渡される仮想キーコード
+    VK_RETURN = 0x0D
+    VK_ESCAPE = 0x1B
+
     def __init__(self, opacity: float = 0.9, position: str = "cursor"):
         super().__init__()
         self._opacity = opacity
@@ -82,11 +82,10 @@ class TranslationOverlay(QWidget):
         self._loading_timer = QTimer(self)
         self._loading_timer.timeout.connect(self._update_loading)
 
-        # グローバルキーリスナー（オーバーレイ表示中のみ有効）
-        self._key_listener: pynput_keyboard.Listener | None = None
+        # オーバーレイの表示状態（HotkeyManager が参照する）
         self._overlay_visible = False
 
-        # 内部シグナルを接続
+        # 内部シグナルを接続（別スレッドからの安全な呼び出し用）
         self._confirm_signal.connect(self._do_confirm)
         self._cancel_signal.connect(self._do_cancel)
 
@@ -233,6 +232,7 @@ class TranslationOverlay(QWidget):
         """フォーカスを奪わずにウィンドウを最前面に表示する"""
         # まず通常の show() で表示（WA_ShowWithoutActivating が効く）
         self.show()
+        self._overlay_visible = True
 
         # Win32 API で確実にフォーカスを奪わず最前面にする
         if sys.platform == "win32":
@@ -244,83 +244,38 @@ class TranslationOverlay(QWidget):
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
             )
 
-        # グローバルキーリスナーを開始
-        self._start_key_listener()
+    @property
+    def overlay_visible(self) -> bool:
+        """オーバーレイが表示中かどうか（HotkeyManager が参照する）"""
+        return self._overlay_visible
 
-    # Enter/Esc の仮想キーコード（Win32 フィルタで使用）
-    _VK_RETURN = 0x0D
-    _VK_ESCAPE = 0x1B
-
-    def _start_key_listener(self) -> None:
+    def handle_key(self, vk_code: int) -> None:
         """
-        オーバーレイ表示中のグローバルキーリスナーを開始する。
+        HotkeyManager から呼ばれるキー処理。
+        別スレッドから呼ばれるため、シグナル経由でUIスレッドにディスパッチする。
 
-        win32_event_filter を使って Enter/Esc キーをゲームに届かないよう
-        抑制（suppress）する。これにより、Enter でチャットの原文が
-        送信されてしまう問題を防ぐ。
-        """
-        # 既存のリスナーがあれば停止
-        self._stop_key_listener()
-
-        self._overlay_visible = True
-        self._key_listener = pynput_keyboard.Listener(
-            on_press=self._on_global_key_press,
-            win32_event_filter=self._win32_key_filter,
-        )
-        self._key_listener.daemon = True
-        self._key_listener.start()
-
-    def _win32_key_filter(self, msg, data) -> None:
-        """
-        Win32 低レベルキーボードフック用フィルタ。
-        オーバーレイ表示中に Enter/Esc キーを他アプリに渡さないよう抑制する。
-        他のキーはそのまま通過させる。
+        Args:
+            vk_code: 仮想キーコード（VK_RETURN or VK_ESCAPE）
         """
         if not self._overlay_visible:
             return
 
-        # data.vkCode に仮想キーコードが入っている
-        if data.vkCode in (self._VK_RETURN, self._VK_ESCAPE):
-            # suppress_event() でキーイベントをゲームに届かないようにする
-            self._key_listener.suppress_event()
-
-    def _stop_key_listener(self) -> None:
-        """グローバルキーリスナーを停止する"""
-        self._overlay_visible = False
-        if self._key_listener is not None:
-            self._key_listener.stop()
-            self._key_listener = None
-
-    def _on_global_key_press(self, key) -> None:
-        """
-        グローバルキー入力のハンドラ（pynput スレッドから呼ばれる）。
-        オーバーレイ表示中のみ Enter/Esc を処理する。
-        """
-        if not self._overlay_visible:
-            return
-
-        try:
-            if key == pynput_keyboard.Key.enter:
-                # Enter: 確定（シグナル経由でUIスレッドへ）
-                if not self._is_loading:
-                    self._confirm_signal.emit()
-            elif key == pynput_keyboard.Key.esc:
-                # Esc: キャンセル（シグナル経由でUIスレッドへ）
-                self._cancel_signal.emit()
-        except AttributeError:
-            pass  # 特殊キー以外は無視
+        if vk_code == self.VK_RETURN and not self._is_loading:
+            self._confirm_signal.emit()
+        elif vk_code == self.VK_ESCAPE:
+            self._cancel_signal.emit()
 
     def _do_confirm(self) -> None:
         """確定処理（UIスレッドで実行される）"""
         self._loading_timer.stop()
-        self._stop_key_listener()
+        self._overlay_visible = False
         self.hide()
         self.confirmed.emit(self._translated_text)
 
     def _do_cancel(self) -> None:
         """キャンセル処理（UIスレッドで実行される）"""
         self._loading_timer.stop()
-        self._stop_key_listener()
+        self._overlay_visible = False
         self.hide()
         self.cancelled.emit()
 

@@ -28,6 +28,12 @@ That's why I built ChatBridge.
 > liability for any issues arising from its use.**
 > Use entirely **at your own risk**.
 
+> **💡 Game Display Mode**
+>
+> ChatBridge's overlay works best in **Borderless Windowed** mode.
+> In exclusive fullscreen mode, the overlay may not be visible.
+> We recommend selecting "Borderless" or "Windowed" in your game's display settings.
+
 Under the hood, it's simple: when you press the hotkey, it sends `Ctrl+A` → `Ctrl+C` to grab the chat text, translates it via the MyMemory API, and pastes the result with `Ctrl+V`. That's it.
 
 > 📖 [Technical details (Specification)](SPEC.md)

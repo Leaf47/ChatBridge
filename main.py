@@ -105,6 +105,7 @@ class ChatBridgeApp:
 
         # ホットキーマネージャー
         self._hotkey_manager = HotkeyManager()
+        self._hotkey_manager.set_overlay(self._overlay)  # オーバーレイの Enter/Esc 処理を統合
         self._hotkey_manager.register(
             self._config.get("hotkey_translate", "alt+j"),
             self._on_translate_hotkey,
@@ -251,6 +252,7 @@ class ChatBridgeApp:
         # ホットキーを更新
         self._hotkey_manager.stop()
         self._hotkey_manager = HotkeyManager()
+        self._hotkey_manager.set_overlay(self._overlay)  # オーバーレイの参照を引き継ぐ
         self._hotkey_manager.register(
             self._config.get("hotkey_translate", "alt+j"),
             self._on_translate_hotkey,
