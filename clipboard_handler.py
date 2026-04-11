@@ -5,37 +5,24 @@
 pynput の Controller を使ってキー入力をシミュレートする。
 """
 
-import ctypes
 import time
 import pyperclip
 from typing import Optional
 from pynput.keyboard import Controller, Key
 
+# プラットフォーム抽象化レイヤー
+from native import get_platform
 
-# Win32 API
-user32 = ctypes.windll.user32
 
 # キーボードコントローラー（pynput）
 _kb = Controller()
 
-# 修飾キーの仮想キーコード
-VK_CONTROL = 0x11
-VK_SHIFT = 0x10
-VK_ALT = 0x12
-
-
-def _is_modifier_pressed() -> bool:
-    """修飾キー（Ctrl/Shift/Alt）が物理的に押されているかチェック"""
-    for vk in (VK_CONTROL, VK_SHIFT, VK_ALT):
-        if user32.GetAsyncKeyState(vk) & 0x8000:
-            return True
-    return False
-
 
 def _wait_for_modifier_release(timeout: float = 2.0) -> None:
     """ユーザーが修飾キーを物理的に離すまで待機する"""
+    plat = get_platform()
     start = time.time()
-    while _is_modifier_pressed():
+    while plat.is_modifier_pressed():
         if time.time() - start > timeout:
             break
         time.sleep(0.02)

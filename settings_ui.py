@@ -17,77 +17,9 @@ from PySide6.QtGui import QFont, QKeySequence
 from config import Config
 from translator import get_translator_names, create_translator, TranslationError
 from i18n import t, get_available_languages
+from native import get_platform
 import sys
 import os
-
-
-# タスクスケジューラでの自動起動管理（管理者権限で自動起動）
-_TASK_NAME = "ChatBridge"
-
-
-def _get_exe_path() -> str:
-    """実行ファイルのパスを取得する"""
-    if getattr(sys, 'frozen', False):
-        return f'"{sys.executable}"'
-    else:
-        exe_path = sys.executable
-        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
-        return f'"{exe_path}" "{script_path}"'
-
-
-
-def _get_auto_start_admin() -> bool:
-    """タスクスケジューラに管理者権限の自動起動タスクが登録されているか確認する"""
-    import subprocess
-    try:
-        result = subprocess.run(
-            ["schtasks", "/query", "/tn", _TASK_NAME],
-            capture_output=True, timeout=5,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
-
-
-def _set_auto_start_admin(enabled: bool) -> bool:
-    """
-    タスクスケジューラで管理者権限の自動起動を設定する。
-    登録時にUACが発生する場合がある。成功時True、失敗時Falseを返す。
-    """
-    import subprocess
-    try:
-        if enabled:
-            exe_path = _get_exe_path()
-            # PowerShellでタスクを作成（最上位特権 + ログオン時実行）
-            ps_script = (
-                f'$action = New-ScheduledTaskAction -Execute {exe_path};'
-                f'$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME;'
-                f'$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0;'
-                f'$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType Interactive;'
-                f'$task = New-ScheduledTask -Action $action -Trigger $trigger -Settings $settings -Principal $principal;'
-                f'Register-ScheduledTask -TaskName "{_TASK_NAME}" -InputObject $task -Force'
-            )
-            # 管理者昇格して実行（UACプロンプトが表示される）
-            result = subprocess.run(
-                ["powershell", "-Command",
-                 f'Start-Process powershell -ArgumentList \'-Command {ps_script}\' -Verb RunAs -Wait'],
-                capture_output=True, timeout=30,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
-            # 登録されたか確認
-            return _get_auto_start_admin()
-        else:
-            # タスクの削除（管理者昇格）
-            result = subprocess.run(
-                ["powershell", "-Command",
-                 f'Start-Process schtasks -ArgumentList \'/delete /tn "{_TASK_NAME}" /f\' -Verb RunAs -Wait'],
-                capture_output=True, timeout=15,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
-            return not _get_auto_start_admin()
-    except Exception:
-        return False
 
 
 # サポートする翻訳言語の一覧（コード, ネイティブ表記名）
@@ -688,7 +620,8 @@ class SettingsWindow(QWidget):
         self._config.set("auto_start", auto_start)
 
         if auto_start != self._initial_auto_start:
-            success = _set_auto_start_admin(auto_start)
+            plat = get_platform()
+            success = plat.set_auto_start(auto_start)
             if auto_start and not success:
                 QMessageBox.warning(
                     self, "⚠️",
@@ -745,18 +678,8 @@ class SettingsWindow(QWidget):
 
     def _restart_app(self) -> None:
         """アプリを管理者権限で再起動する"""
-        import ctypes
-        if getattr(sys, 'frozen', False):
-            exe = sys.executable
-            params = ""
-        else:
-            exe = sys.executable.replace("python.exe", "pythonw.exe")
-            script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
-            params = f'"{script}"'
-
-        ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", exe, params, None, 1
-        )
+        plat = get_platform()
+        plat.relaunch_as_admin()
         # 現在のアプリを終了
         from PySide6.QtWidgets import QApplication
         QApplication.instance().quit()

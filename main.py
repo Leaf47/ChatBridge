@@ -9,7 +9,6 @@ ChatBridge — チャット翻訳ツール
 import sys
 import os
 import signal
-import ctypes
 import threading
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QTimer, Qt, Slot, Signal, QObject
@@ -21,34 +20,11 @@ from translator import create_translator, TranslationError
 from hotkey_manager import HotkeyManager
 from clipboard_handler import ClipboardHandler
 from overlay import TranslationOverlay
-from settings_ui import SettingsWindow, _set_auto_start_admin
+from settings_ui import SettingsWindow
 from tray_app import TrayApp
 
-
-def _is_admin() -> bool:
-    """現在のプロセスが管理者権限で実行されているかチェックする"""
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin() != 0
-    except Exception:
-        return False
-
-
-def _relaunch_as_admin() -> None:
-    """管理者権限でアプリを再起動する（UACプロンプト表示）"""
-    if getattr(sys, 'frozen', False):
-        # exe の場合
-        exe = sys.executable
-        params = ""
-    else:
-        # 開発時: pythonw.exe を使ってコンソールウィンドウを出さない
-        exe = sys.executable.replace("python.exe", "pythonw.exe")
-        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
-        params = f'"{script}"'
-
-    # ShellExecuteW で管理者昇格して起動（UACプロンプト表示）
-    ctypes.windll.shell32.ShellExecuteW(
-        None, "runas", exe, params, None, 1  # 1 = SW_SHOWNORMAL
-    )
+# プラットフォーム抽象化レイヤー
+from native import get_platform
 
 
 class UIBridge(QObject):
@@ -72,6 +48,9 @@ class ChatBridgeApp:
 
         # 設定（main() で読み込み済み）
         self._config = config
+
+        # プラットフォーム抽象化レイヤー
+        self._platform = get_platform()
 
         # i18n 初期化（設定の ui_lang に基づく）
         i18n.init(self._config.get("ui_lang", "ja"))
@@ -219,8 +198,8 @@ class ChatBridgeApp:
         msg.exec()
 
         if msg.clickedButton() == yes_btn:
-            # タスクスケジューラに管理者権限自動起動を登録
-            success = _set_auto_start_admin(True)
+            # プラットフォーム層で自動起動を登録
+            success = self._platform.set_auto_start(True)
             if success:
                 self._config.set("auto_start", True)
                 QMessageBox.information(
@@ -296,60 +275,14 @@ class ChatBridgeApp:
         self._app.quit()
 
 
-def _create_global_mutex():
-    """
-    全権限レベルからアクセス可能な名前付きMutexを作成する。
-
-    管理者権限で作成したMutexは、デフォルトでは通常権限プロセスから
-    アクセスできない（ERROR_ACCESS_DENIED）。NULL DACL を設定した
-    SECURITY_ATTRIBUTES を使うことで、全権限レベルからアクセス可能にする。
-
-    Returns:
-        tuple: (mutex_handle, already_exists)
-            - mutex_handle: Mutexのハンドル（0の場合は作成失敗）
-            - already_exists: 既に同名のMutexが存在する場合True
-    """
-    # SECURITY_ATTRIBUTES 構造体を定義
-    class SECURITY_ATTRIBUTES(ctypes.Structure):
-        _fields_ = [
-            ("nLength", ctypes.c_ulong),
-            ("lpSecurityDescriptor", ctypes.c_void_p),
-            ("bInheritHandle", ctypes.c_int),
-        ]
-
-    _advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
-    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-
-    # NULL DACL のセキュリティ記述子を作成
-    # これにより全ユーザー・全権限レベルからアクセス可能になる
-    sd = ctypes.c_buffer(64)  # SECURITY_DESCRIPTOR バッファ
-    _advapi32.InitializeSecurityDescriptor(ctypes.byref(sd), 1)  # SECURITY_DESCRIPTOR_REVISION = 1
-    # NULL DACL を設定（第2引数=True: DACLあり, 第3引数=None: NULL DACL, 第4引数=False: デフォルト）
-    _advapi32.SetSecurityDescriptorDacl(ctypes.byref(sd), True, None, False)
-
-    sa = SECURITY_ATTRIBUTES()
-    sa.nLength = ctypes.sizeof(SECURITY_ATTRIBUTES)
-    sa.lpSecurityDescriptor = ctypes.addressof(sd)
-    sa.bInheritHandle = False
-
-    mutex_name = "Global\\ChatBridge_SingleInstance_Mutex"
-    mutex = _kernel32.CreateMutexW(ctypes.byref(sa), False, mutex_name)
-    last_error = ctypes.get_last_error()
-
-    # ERROR_ALREADY_EXISTS (183): 同じ名前のMutexが既に存在する
-    # ERROR_ACCESS_DENIED (5): 権限不足でアクセスできない（=別権限で起動中）
-    already_exists = (last_error == 183) or (mutex == 0 and last_error == 5)
-
-    return mutex, already_exists
-
-
 def main():
     """エントリーポイント"""
+    # プラットフォーム抽象化レイヤーを取得
+    plat = get_platform()
+
     # --- 多重起動防止 ---
-    # Windows の名前付き Mutex を使用して、同じアプリの2重起動を防ぐ。
-    # Global\ プレフィックスで管理者/通常権限の両方から見えるようにする。
-    # NULL DACL で全権限レベルからアクセス可能にする。
-    _mutex_handle, already_running = _create_global_mutex()
+    # プラットフォーム固有のロック機構を使用
+    _lock_handle, already_running = plat.create_single_instance_lock()
 
     if already_running:
         # 既に起動中 → 簡易ダイアログを表示して終了
@@ -413,7 +346,7 @@ def main():
         i18n.init(chosen_lang)
 
     # --- 管理者権限チェック ---
-    if not _is_admin():
+    if not plat.is_admin():
         msg = QMessageBox()
         msg.setWindowTitle("ChatBridge")
         msg.setIcon(QMessageBox.Icon.Warning)
@@ -432,7 +365,7 @@ def main():
         msg.exec()
 
         if msg.clickedButton() == relaunch_btn:
-            _relaunch_as_admin()
+            plat.relaunch_as_admin()
 
         sys.exit(0)
 

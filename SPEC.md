@@ -312,6 +312,10 @@ ChatBridge/
 ├── overlay.py           # 翻訳結果オーバーレイ
 ├── settings_ui.py       # 設定画面UI
 ├── tray_app.py          # システムトレイ
+├── native/              # プラットフォーム抽象化レイヤー
+│   ├── __init__.py      # プラットフォーム検出・自動選択
+│   ├── base.py          # 抽象基底クラス（インターフェース定義）
+│   └── windows.py       # Windows 固有実装
 ├── translator/          # 翻訳エンジン
 │   ├── __init__.py      # ファクトリ関数
 │   ├── base.py          # 翻訳エンジン基底クラス

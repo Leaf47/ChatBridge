@@ -41,12 +41,12 @@ PC版（Windows / macOS）を起点に、モバイル版（iPadOS / iOS）へ展
 
 ### プラットフォーム抽象化レイヤー
 
-現在 Windows に直接依存しているコードを `platform/` モジュールとして分離する。
+現在 Windows に直接依存しているコードを `native/` モジュールとして分離する。
 これにより、macOS 対応時にプラットフォーム固有モジュールを追加するだけで済む構成にする。
 
 ```
 ChatBridge/
-  ├── platform/
+  ├── native/
   │   ├── __init__.py       # プラットフォーム検出・自動選択
   │   ├── base.py           # 抽象基底クラス（インターフェース定義）
   │   ├── windows.py        # Windows 固有実装
@@ -157,7 +157,7 @@ iPadOS / iOS 上で原神のチャットを送受信ともに翻訳する。
 
 Phase 1 で構築したプラットフォーム抽象化レイヤーを活用し、macOS 対応を追加する。
 主要ライブラリ（PySide6、pynput、pystray）はすべて macOS をサポートしているため、
-プラットフォーム固有モジュール（`platform/macos.py`）の実装が主な作業となる。
+プラットフォーム固有モジュール（`native/macos.py`）の実装が主な作業となる。
 
 ### 共通コード（変更不要）
 
@@ -207,13 +207,13 @@ Phase 1 (Desktop OCR + プラットフォーム抽象化)
   ├─ OCR エンジンの知見
   ├─ 差分検出アルゴリズム
   ├─ チャットエリア指定の UX
-  └─ platform/ 抽象化レイヤー
+  └─ native/ 抽象化レイヤー
          │
          ├──────────────────────┐
          ▼                      ▼
 Phase 2 (iPadOS / iOS)   Phase 2.5 (macOS)
   │                        │
-  ├─ モバイルOCRの知見       ├─ platform/macos.py 追加
+  ├─ モバイルOCRの知見       ├─ native/macos.py 追加
   ├─ Keyboard Extension     └─ macOS 固有の権限・配布対応
   └─ PiP/通知の知見
          │
@@ -222,5 +222,5 @@ Phase 3 (Android) — 将来
 ```
 
 - Phase 1 で得た OCR・差分検出の知見は、Phase 2 の Broadcast Extension 開発に直接活きる
-- Phase 1 で構築した `platform/` 抽象化レイヤーにより、Phase 2.5 は最小限の実装で macOS 対応が可能
+- Phase 1 で構築した `native/` 抽象化レイヤーにより、Phase 2.5 は最小限の実装で macOS 対応が可能
 - Phase 2 と Phase 2.5 は独立しており、並行開発も可能

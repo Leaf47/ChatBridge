@@ -5,7 +5,7 @@
 Enter で翻訳結果を確定、Esc でキャンセル。
 
 フルスクリーンゲーム対応:
-  - ウィンドウのフォーカスを奪わない（SWP_NOACTIVATE）
+  - ウィンドウのフォーカスを奪わない（プラットフォーム層で制御）
   - Enter/Esc は HotkeyManager の統合リスナーで処理する
     （pynput の複数リスナー競合を避けるため）
 """
@@ -21,19 +21,8 @@ from PySide6.QtGui import (
 )
 
 from i18n import t
-# Win32 API を使用してフォーカスを奪わずに最前面表示する
-if sys.platform == "win32":
-    import ctypes
-    import ctypes.wintypes
-
-    _user32 = ctypes.windll.user32
-
-    # SetWindowPos の定数
-    HWND_TOPMOST = ctypes.wintypes.HWND(-1)
-    SWP_NOACTIVATE = 0x0010
-    SWP_NOMOVE = 0x0002
-    SWP_NOSIZE = 0x0001
-    SWP_SHOWWINDOW = 0x0040
+# プラットフォーム抽象化レイヤー
+from native import get_platform
 
 
 # 言語コード → 表示ラベル（オーバーレイに表示する）
@@ -234,15 +223,9 @@ class TranslationOverlay(QWidget):
         self.show()
         self._overlay_visible = True
 
-        # Win32 API で確実にフォーカスを奪わず最前面にする
-        if sys.platform == "win32":
-            hwnd = int(self.winId())
-            _user32.SetWindowPos(
-                hwnd,
-                HWND_TOPMOST,
-                0, 0, 0, 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-            )
+        # プラットフォーム層で確実にフォーカスを奪わず最前面にする
+        plat = get_platform()
+        plat.show_window_no_activate(int(self.winId()))
 
     @property
     def overlay_visible(self) -> bool:
