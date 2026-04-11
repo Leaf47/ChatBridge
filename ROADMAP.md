@@ -6,9 +6,16 @@
 
 ## 製品ビジョン
 
-ChatBridge は、ゲーム中のチャットをリアルタイムで翻訳するツールです。
-PC版（Windows / macOS）を起点に、モバイル版（iPadOS / iOS）へ展開し、
+ChatBridge は、テキストのコピー＆ペーストと翻訳 API を組み合わせたリアルタイム翻訳ツールです。
+主にゲーム内チャット（原神）での利用を想定していますが、
+仕組み上、ゲームに限らずあらゆるアプリケーション上で汎用的に利用できます。
+開発者自身の動作確認は原神のみで行っています（その他の用途は MIT ライセンスのもと自己責任）。
+
+PC版（Windows / macOS）を起点に、モバイル版（iPadOS / iOS / Android）へ展開し、
 プラットフォームを問わずシームレスな多言語コミュニケーションを実現します。
+
+- **Windows / iPadOS / iOS**: 開発者自身が原神で利用するために開発・動作確認
+- **macOS / Android**: 同じツールをより多くのプラットフォーム・ユーザーへ届けるために対応を計画
 
 ---
 
@@ -18,6 +25,7 @@ PC版（Windows / macOS）を起点に、モバイル版（iPadOS / iOS）へ展
 |---|---|---|---|
 | `ChatBridge` | Windows / macOS デスクトップ | Python / PySide6 / pynput | ✅ v1.0.0 (Windows)、macOS 計画中 |
 | `ChatBridge-iOS` | iPadOS / iOS | Swift / SwiftUI / Xcode | 📋 計画中 |
+| `ChatBridge-Android` | Android | 未定（Kotlin / Jetpack Compose 等を想定） | 🔲 未定（検証端末未確保） |
 
 ---
 
@@ -156,6 +164,8 @@ iPadOS / iOS 上で原神のチャットを送受信ともに翻訳する。
 ### 目的
 
 Phase 1 で構築したプラットフォーム抽象化レイヤーを活用し、macOS 対応を追加する。
+ChatBridge は仕組み上すでに汎用的に利用できるツールであり、この既存の価値を
+macOS ユーザーにも届けることが目的。
 主要ライブラリ（PySide6、pynput、pystray）はすべて macOS をサポートしているため、
 プラットフォーム固有モジュール（`native/macos.py`）の実装が主な作業となる。
 
@@ -185,7 +195,7 @@ Phase 1 で構築したプラットフォーム抽象化レイヤーを活用し
 
 - macOS の公証（Notarization）対応（未署名アプリのGatekeeper回避が必要）
 - ScreenCaptureKit の Python バインディング（pyobjc 経由）
-- macOS 版 Genshin Impact の動作確認（ボーダーレスウィンドウ互換性）
+- 各種アプリケーション上でのオーバーレイ表示・ボーダーレスウィンドウとの互換性検証
 
 ---
 
@@ -194,6 +204,7 @@ Phase 1 で構築したプラットフォーム抽象化レイヤーを活用し
 > **状態**: 未計画
 
 Android 版は実機検証環境が整った段階で検討する。
+macOS 対応と同様に、ChatBridge の既存の価値をより幅広いユーザー層へ届けることを目指す。
 技術的にはiOS版より制約が少なく（MediaProjection API、SYSTEM_ALERT_WINDOW）、
 iOS版の知見を活かしてスムーズに開発できる見込み。
 
