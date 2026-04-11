@@ -1,9 +1,37 @@
 # ChatBridge — Chat Translation Tool 🌉
 
-A desktop tool that translates in-game chat in real time.
+> 🌐 [日本語版](README.md)
+
+A Windows desktop tool that translates in-game chat in real time.
 Translate your typed text with a single hotkey and send it instantly.
 
-> 🌐 [日本語版](README.md)
+### 💬 Why I Made This
+
+After Genshin Impact introduced "Miliastra Wonderland," I found myself
+communicating with players from around the world much more often.
+But since I don't speak English, I was constantly switching to browser
+translation sites or Alt+Tabbing to external translation apps just to
+keep up with the conversation.
+
+"Wouldn't it be great if I could translate without leaving the game screen?"
+
+That's why I built ChatBridge.
+
+> **⚠️ Disclaimer**
+>
+> ChatBridge was developed and tested primarily for use with **Genshin Impact**.
+> It may work with other games or applications, but this is not guaranteed.
+> Use with games other than Genshin Impact is **at your own risk**.
+>
+> This software is released under the **MIT License**.
+> You are free to use, modify, and redistribute it,
+> but **it comes with no warranty of any kind, and the developer assumes no
+> liability for any issues arising from its use.**
+> Use entirely at your own risk.
+
+Under the hood, it's simple: when you press the hotkey, it sends `Ctrl+A` → `Ctrl+C` to grab the chat text, translates it via the MyMemory API, and pastes the result with `Ctrl+V`. That's it.
+
+> 📖 [Technical details (Specification)](SPEC.md)
 
 ## Features
 
@@ -69,18 +97,36 @@ Right-click the system tray icon → "Open Settings"
 | Auto-Paste | Paste immediately without confirmation |
 | Auto-Start | Auto-launch on Windows startup via Task Scheduler |
 | UI Language | 日本語 / English |
-| MyMemory Email | Register to increase daily limit to 50,000 characters |
+| MyMemory Email | Set an email address to increase daily translation limit (see below) |
+
+### About MyMemory API
+
+ChatBridge uses the **MyMemory API** (free) for translation.
+No API key is required — it works out of the box.
+
+| Condition | Daily Translation Limit |
+|---|---|
+| No email address set | 5,000 characters |
+| Email address set | 50,000 characters |
+
+You can set your email address in the "Translation" tab of the Settings panel.
+This is a MyMemory API feature — including an email address in API requests
+expands your daily usage quota.
 
 ## Auto-Start Setup
 
-1. Right-click tray icon → "Open Settings"
-2. Check "Launch on Windows startup"
-3. Click "Yes" on the UAC prompt
-4. ChatBridge will now auto-launch with admin privileges on Windows startup (no UAC shown)
+On first launch, you'll be asked whether to enable auto-start.
+Selecting "Yes (Recommended)" will configure ChatBridge to launch
+automatically when Windows starts.
 
-> **How it works**: Uses Windows Task Scheduler.
-> UAC confirmation is only required when registering the task.
-> Subsequent auto-launches on startup will not show a UAC prompt.
+To change this later:
+
+1. Right-click tray icon → "Open Settings"
+2. Toggle "Launch on Windows startup"
+3. Save settings
+
+> **How it works**: Uses Windows Task Scheduler to auto-launch with admin privileges.
+> Once configured, subsequent auto-launches will not show a UAC (privilege confirmation) dialog.
 
 ## Uninstallation
 
