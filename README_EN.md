@@ -21,13 +21,12 @@ That's why I built ChatBridge.
 >
 > ChatBridge was developed and tested primarily for use with **Genshin Impact**.
 > It may work with other games or applications, but this is not guaranteed.
-> Use with games other than Genshin Impact is **at your own risk**.
 >
 > This software is released under the **MIT License**.
 > You are free to use, modify, and redistribute it,
 > but **it comes with no warranty of any kind, and the developer assumes no
 > liability for any issues arising from its use.**
-> Use entirely at your own risk.
+> Use entirely **at your own risk**.
 
 Under the hood, it's simple: when you press the hotkey, it sends `Ctrl+A` → `Ctrl+C` to grab the chat text, translates it via the MyMemory API, and pastes the result with `Ctrl+V`. That's it.
 
