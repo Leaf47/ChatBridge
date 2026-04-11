@@ -3,13 +3,18 @@
 A desktop tool that translates in-game chat in real time.
 Translate your typed text with a single hotkey and send it instantly.
 
+> 🌐 [日本語版](README.md)
+
 ## Features
 
 - 🎮 **Hotkey Translation**: Press `Alt+J` to instantly translate selected/typed text
 - 🌏 **Multi-language**: Supports translation between 9 languages including Japanese ⇔ English
-- 🔄 **Overlay Display**: Shows translation results on top of your game screen
+- 🔄 **Overlay Display**: Shows translation results on top of your game screen (without stealing focus)
 - ⚙️ **Settings Panel**: Customize hotkeys, translation direction, UI language, and more
 - 🌐 **UI Localization**: Built-in Japanese/English UI, extensible via external JSON files
+- 🛡️ **Admin Privileges**: Automatically manages privileges required for keyboard simulation in games
+- 🚀 **Auto-Start**: Supports auto-start with admin privileges via Task Scheduler
+- 🔒 **Single Instance**: Prevents duplicate instances across admin/standard privilege levels
 - 💰 **Free**: Uses MyMemory Translation API (no API key required)
 
 ## Installation
@@ -20,49 +25,34 @@ No installer required — it does not modify the registry or system folders.
 ```
 📁 ChatBridge/
   ├── ChatBridge.exe
-  └── README.md
+  └── config.json (auto-generated on first launch)
 ```
-
-A `config.json` (settings file) will be automatically created in the same folder on first launch.
 
 ## Usage
 
-### Launch
+### First Launch
 
-Double-click `ChatBridge.exe` to start.
-A system tray icon will appear when it's running.
+1. Double-click `ChatBridge.exe` (or right-click → "Run as administrator")
+2. Select your language (日本語 / English)
+3. If admin privileges are required, an elevation dialog will appear automatically
+4. You'll be asked whether to set up auto-start on Windows startup
+5. A system tray icon will appear when it's running
 
-### ⚠️ Administrator Privileges (Important)
+### ⚠️ Administrator Privileges
 
 When using ChatBridge with games that run with administrator privileges
 (e.g., **Genshin Impact, Valorant, Apex Legends**),
 ChatBridge must also be **run as administrator**.
 
-This is due to Windows security restrictions (UIPI) —
-a standard-privilege app cannot detect key inputs in an elevated app.
+If launched without admin privileges, you'll be automatically prompted to elevate.
 
-**To manually run as administrator:**
-1. Right-click `ChatBridge.exe`
-2. Select "Run as administrator"
-3. Click "Yes" on the UAC prompt
-
-**To automatically run as administrator on startup:**
-1. Launch ChatBridge (right-click → Run as administrator for the first time)
-2. Right-click the system tray icon → "Open Settings"
-3. Check "Launch on Windows startup"
-4. Check "Run as administrator (required for games)"
-5. Click "Yes" on the UAC prompt that appears
-6. From now on, ChatBridge will auto-launch with admin privileges on Windows startup (no UAC prompt)
-
-> **How it works**: Admin auto-start uses Windows Task Scheduler.
-> UAC confirmation is only required when registering the task.
-> Subsequent auto-launches on startup will not show a UAC prompt.
-> Standard auto-start uses the Registry (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`).
+> **Why?** Due to Windows security restrictions (UIPI),
+> a standard-privilege app cannot detect key inputs in an elevated app.
 
 ### Translation
 
-1. Activate the window containing the text you want to translate
-2. Press `Alt+J` and release
+1. Type text in your game's chat box
+2. Press `Alt+J`
 3. The translation result appears in an overlay
 4. `Enter` → Paste the translation / `Esc` → Cancel
 
@@ -70,15 +60,36 @@ a standard-privilege app cannot detect key inputs in an elevated app.
 
 Right-click the system tray icon → "Open Settings"
 
+| Setting | Description |
+|---|---|
+| Hotkey | Key to trigger translation (default: `Alt+J`) |
+| Translation Direction | Source/target language pair |
+| Overlay Position | Cursor position / Screen center / Top right |
+| Overlay Opacity | 30% – 100% |
+| Auto-Paste | Paste immediately without confirmation |
+| Auto-Start | Auto-launch on Windows startup via Task Scheduler |
+| UI Language | 日本語 / English |
+| MyMemory Email | Register to increase daily limit to 50,000 characters |
+
+## Auto-Start Setup
+
+1. Right-click tray icon → "Open Settings"
+2. Check "Launch on Windows startup"
+3. Click "Yes" on the UAC prompt
+4. ChatBridge will now auto-launch with admin privileges on Windows startup (no UAC shown)
+
+> **How it works**: Uses Windows Task Scheduler.
+> UAC confirmation is only required when registering the task.
+> Subsequent auto-launches on startup will not show a UAC prompt.
+
 ## Uninstallation
 
 1. Exit ChatBridge
-2. If auto-start was enabled, **turn it off in Settings first**, or manually:
-   - **Standard auto-start**: Remove `ChatBridge` from Registry `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
-   - **Admin auto-start**: Delete the `ChatBridge` task from Task Scheduler
+2. If auto-start was enabled, **turn it off in Settings first**,
+   or manually delete the `ChatBridge` task from Task Scheduler
 3. Delete the ChatBridge folder — done!
 
-> **Portable Design**: Except for the auto-start settings mentioned above,
+> **Portable Design**: Except for the auto-start setting (Task Scheduler),
 > ChatBridge does not create files or registry entries outside its folder.
 
 ## UI Localization
@@ -95,10 +106,11 @@ See the `_BUILTIN` dictionary in [i18n.py](i18n.py) for the JSON format referenc
 ## Tech Stack
 
 - Python 3.12+
-- PySide6 (Qt6) — UI
+- PySide6 (Qt6) — UI & Overlay
 - pynput — Hotkey detection & key simulation
 - pystray — System tray
-- MyMemory API — Translation
+- MyMemory API — Translation engine
+- PyInstaller — exe build
 
 ## License
 

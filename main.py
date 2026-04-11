@@ -294,19 +294,64 @@ class ChatBridgeApp:
         self._app.quit()
 
 
+def _create_global_mutex():
+    """
+    全権限レベルからアクセス可能な名前付きMutexを作成する。
+
+    管理者権限で作成したMutexは、デフォルトでは通常権限プロセスから
+    アクセスできない（ERROR_ACCESS_DENIED）。NULL DACL を設定した
+    SECURITY_ATTRIBUTES を使うことで、全権限レベルからアクセス可能にする。
+
+    Returns:
+        tuple: (mutex_handle, already_exists)
+            - mutex_handle: Mutexのハンドル（0の場合は作成失敗）
+            - already_exists: 既に同名のMutexが存在する場合True
+    """
+    # SECURITY_ATTRIBUTES 構造体を定義
+    class SECURITY_ATTRIBUTES(ctypes.Structure):
+        _fields_ = [
+            ("nLength", ctypes.c_ulong),
+            ("lpSecurityDescriptor", ctypes.c_void_p),
+            ("bInheritHandle", ctypes.c_int),
+        ]
+
+    _advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    # NULL DACL のセキュリティ記述子を作成
+    # これにより全ユーザー・全権限レベルからアクセス可能になる
+    sd = ctypes.c_buffer(64)  # SECURITY_DESCRIPTOR バッファ
+    _advapi32.InitializeSecurityDescriptor(ctypes.byref(sd), 1)  # SECURITY_DESCRIPTOR_REVISION = 1
+    # NULL DACL を設定（第2引数=True: DACLあり, 第3引数=None: NULL DACL, 第4引数=False: デフォルト）
+    _advapi32.SetSecurityDescriptorDacl(ctypes.byref(sd), True, None, False)
+
+    sa = SECURITY_ATTRIBUTES()
+    sa.nLength = ctypes.sizeof(SECURITY_ATTRIBUTES)
+    sa.lpSecurityDescriptor = ctypes.addressof(sd)
+    sa.bInheritHandle = False
+
+    mutex_name = "Global\\ChatBridge_SingleInstance_Mutex"
+    mutex = _kernel32.CreateMutexW(ctypes.byref(sa), False, mutex_name)
+    last_error = ctypes.get_last_error()
+
+    # ERROR_ALREADY_EXISTS (183): 同じ名前のMutexが既に存在する
+    # ERROR_ACCESS_DENIED (5): 権限不足でアクセスできない（=別権限で起動中）
+    already_exists = (last_error == 183) or (mutex == 0 and last_error == 5)
+
+    return mutex, already_exists
+
+
 def main():
     """エントリーポイント"""
     # --- 多重起動防止 ---
     # Windows の名前付き Mutex を使用して、同じアプリの2重起動を防ぐ。
     # Global\ プレフィックスで管理者/通常権限の両方から見えるようにする。
-    # use_last_error=True で GetLastError の値を Python 側で正確に取得する。
-    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    mutex_name = "Global\\ChatBridge_SingleInstance_Mutex"
-    mutex = _kernel32.CreateMutexW(None, False, mutex_name)
-    last_error = ctypes.get_last_error()
+    # NULL DACL で全権限レベルからアクセス可能にする。
+    _mutex_handle, already_running = _create_global_mutex()
 
-    if last_error == 183:  # ERROR_ALREADY_EXISTS
+    if already_running:
         # 既に起動中 → 簡易ダイアログを表示して終了
+        print("ChatBridge: already running, showing notification...")
         app = QApplication(sys.argv)
         i18n.init("ja")
         try:
@@ -314,10 +359,13 @@ def main():
             i18n.init(config.get("ui_lang", "ja"))
         except Exception:
             pass
-        QMessageBox.information(
-            None, "ChatBridge",
-            t("already_running"),
-        )
+        msg = QMessageBox()
+        msg.setWindowTitle("ChatBridge")
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText(t("already_running"))
+        # ゲーム等の全画面アプリの背後に隠れないよう最前面に表示
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        msg.exec()
         sys.exit(0)
 
     # 最低限の Qt を初期化
