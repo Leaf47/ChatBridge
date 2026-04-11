@@ -40,6 +40,14 @@ Under the hood, it's simple: when you press the hotkey, it sends `Ctrl+A` → `C
 >
 > 🗺️ [Development Roadmap](ROADMAP.md)
 
+## 📥 Download
+
+You can download the latest version from the **GitHub Releases** page.
+
+### 👉 [**Download Latest Version**](https://github.com/Leaf47/ChatBridge/releases)
+
+> **💡 Tip**: Click `ChatBridge.exe` in the "Assets" section of the release page to start the download.
+
 ## Features
 
 - 🎮 **Hotkey Translation**: Press `Alt+J` to instantly translate selected/typed text
