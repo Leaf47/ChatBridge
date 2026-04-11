@@ -20,6 +20,9 @@ from i18n import t, get_available_languages
 from native import get_platform
 import sys
 import os
+import webbrowser
+
+from version import __version__, __repo__
 
 
 # サポートする翻訳言語の一覧（コード, ネイティブ表記名）
@@ -288,6 +291,7 @@ class SettingsWindow(QWidget):
         tabs = QTabWidget()
         tabs.addTab(self._create_general_tab(), t("tab_general"))
         tabs.addTab(self._create_translator_tab(), t("tab_translator"))
+        tabs.addTab(self._create_about_tab(), t("tab_about"))
         main_layout.addWidget(tabs)
 
         # ボタン行
@@ -650,6 +654,9 @@ class SettingsWindow(QWidget):
         self._config.set("api_keys.deepl", self._deepl_key_input.text())
         self._config.set("api_keys.google", self._google_key_input.text())
 
+        # 自動アップデートチェック
+        self._config.set("auto_update_check", self._auto_update_check.isChecked())
+
         # 保存
         self._config.save()
         self.settings_changed.emit()
@@ -683,3 +690,195 @@ class SettingsWindow(QWidget):
         # 現在のアプリを終了
         from PySide6.QtWidgets import QApplication
         QApplication.instance().quit()
+
+    # --- About タブ ---
+
+    def _create_about_tab(self) -> QWidget:
+        """About タブを作成する"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(12)
+
+        # --- バージョン情報グループ ---
+        info_group = QGroupBox(f"🌐 ChatBridge")
+        info_layout = QFormLayout(info_group)
+        info_layout.setContentsMargins(12, 20, 12, 12)
+
+        version_label = QLabel(f"v{__version__}")
+        version_label.setStyleSheet("color: #a78bfa; font-weight: bold; font-size: 15px;")
+        info_layout.addRow(t("about_version") + ":", version_label)
+
+        license_label = QLabel("MIT License")
+        license_label.setStyleSheet("color: #9ca3af;")
+        info_layout.addRow(t("about_license") + ":", license_label)
+
+        layout.addWidget(info_group)
+
+        # --- アップデートグループ ---
+        update_group = QGroupBox(t("update_group"))
+        update_layout = QVBoxLayout(update_group)
+        update_layout.setContentsMargins(12, 20, 12, 12)
+        update_layout.setSpacing(8)
+
+        # アップデート確認ボタン
+        self._update_check_btn = QPushButton(t("update_check_btn"))
+        self._update_check_btn.clicked.connect(self._on_check_update_clicked)
+        update_layout.addWidget(self._update_check_btn)
+
+        # ステータスラベル
+        self._update_status_label = QLabel("")
+        self._update_status_label.setWordWrap(True)
+        self._update_status_label.setStyleSheet("color: #9ca3af; font-size: 12px;")
+        update_layout.addWidget(self._update_status_label)
+
+        # ダウンロードボタン（初期状態は非表示）
+        self._update_download_btn = QPushButton(t("update_download_btn"))
+        self._update_download_btn.clicked.connect(self._on_download_update_clicked)
+        self._update_download_btn.hide()
+        update_layout.addWidget(self._update_download_btn)
+
+        # 進捗ラベル（初期状態は非表示）
+        self._update_progress_label = QLabel("")
+        self._update_progress_label.setStyleSheet("color: #a78bfa; font-size: 12px;")
+        self._update_progress_label.hide()
+        update_layout.addWidget(self._update_progress_label)
+
+        # 自動アップデートチェック
+        self._auto_update_check = QCheckBox(t("update_auto_check"))
+        self._auto_update_check.setChecked(self._config.get("auto_update_check", True))
+        update_layout.addWidget(self._auto_update_check)
+
+        # 最終確認日時
+        last_check = self._config.get("last_update_check", "")
+        if last_check:
+            self._last_check_label = QLabel(t("update_last_check", time=last_check))
+        else:
+            self._last_check_label = QLabel(t("update_never_checked"))
+        self._last_check_label.setStyleSheet("color: #6b7280; font-size: 11px;")
+        update_layout.addWidget(self._last_check_label)
+
+        layout.addWidget(update_group)
+
+        # --- リンクグループ ---
+        links_group = QGroupBox(t("about_links_group"))
+        links_layout = QHBoxLayout(links_group)
+        links_layout.setContentsMargins(12, 20, 12, 12)
+
+        github_btn = QPushButton(t("about_github"))
+        github_btn.setObjectName("secondaryBtn")
+        github_btn.clicked.connect(
+            lambda: webbrowser.open(f"https://github.com/{__repo__}")
+        )
+        links_layout.addWidget(github_btn)
+
+        bug_btn = QPushButton(t("about_report_bug"))
+        bug_btn.setObjectName("secondaryBtn")
+        bug_btn.clicked.connect(
+            lambda: webbrowser.open(f"https://github.com/{__repo__}/issues")
+        )
+        links_layout.addWidget(bug_btn)
+
+        layout.addWidget(links_group)
+
+        layout.addStretch()
+        scroll.setWidget(container)
+        return scroll
+
+    # --- アップデート関連メソッド ---
+
+    def set_updater(self, updater) -> None:
+        """AutoUpdater インスタンスを設定画面に接続する"""
+        self._updater = updater
+        self._updater.update_found.connect(self._on_update_found)
+        self._updater.update_not_found.connect(self._on_update_not_found)
+        self._updater.update_error.connect(self._on_update_error)
+        self._updater.download_progress.connect(self._on_download_progress)
+        self._updater.update_ready.connect(self._on_update_ready)
+
+    def _on_check_update_clicked(self) -> None:
+        """アップデート確認ボタンが押されたとき"""
+        if not hasattr(self, '_updater'):
+            return
+        self._update_check_btn.setEnabled(False)
+        self._update_check_btn.setText(t("update_checking"))
+        self._update_status_label.setText("")
+        self._update_download_btn.hide()
+        self._updater.check_for_update()
+
+    def _on_download_update_clicked(self) -> None:
+        """ダウンロードボタンが押されたとき"""
+        if not hasattr(self, '_updater'):
+            return
+        self._update_download_btn.setEnabled(False)
+        self._update_progress_label.show()
+        self._update_progress_label.setText(t("update_downloading", progress=0))
+        self._updater.download_and_apply()
+
+    def _on_update_found(self, info) -> None:
+        """新しいバージョンが見つかったとき"""
+        from datetime import datetime
+        self._update_check_btn.setEnabled(True)
+        self._update_check_btn.setText(t("update_check_btn"))
+        self._update_status_label.setText(t("update_available", version=info.version))
+        self._update_status_label.setStyleSheet("color: #fbbf24; font-size: 12px;")
+        self._update_download_btn.show()
+        self._update_download_btn.setEnabled(True)
+        # 最終確認日時を更新
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        self._last_check_label.setText(t("update_last_check", time=now))
+        self._config.set("last_update_check", now)
+        self._config.save()
+
+    def _on_update_not_found(self) -> None:
+        """最新版を使用中のとき"""
+        from datetime import datetime
+        self._update_check_btn.setEnabled(True)
+        self._update_check_btn.setText(t("update_check_btn"))
+        self._update_status_label.setText(t("update_latest"))
+        self._update_status_label.setStyleSheet("color: #34d399; font-size: 12px;")
+        self._update_download_btn.hide()
+        # 最終確認日時を更新
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        self._last_check_label.setText(t("update_last_check", time=now))
+        self._config.set("last_update_check", now)
+        self._config.save()
+
+    def _on_update_error(self, error: str) -> None:
+        """エラーが発生したとき"""
+        self._update_check_btn.setEnabled(True)
+        self._update_check_btn.setText(t("update_check_btn"))
+        self._update_status_label.setText(t("update_error", error=error))
+        self._update_status_label.setStyleSheet("color: #f87171; font-size: 12px;")
+        self._update_download_btn.hide()
+        self._update_progress_label.hide()
+
+    def _on_download_progress(self, progress: int) -> None:
+        """ダウンロード進捗の更新"""
+        self._update_progress_label.setText(
+            t("update_downloading", progress=progress)
+        )
+
+    def _on_update_ready(self) -> None:
+        """ダウンロード完了、適用準備ができたとき"""
+        self._update_progress_label.setText(t("update_applying"))
+        self._update_download_btn.hide()
+
+        # 確認ダイアログ
+        msg = QMessageBox(self)
+        msg.setWindowTitle("ChatBridge")
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText(t("update_restart_text"))
+        msg.exec()
+
+        # 適用＆再起動
+        if hasattr(self, '_updater'):
+            self._updater.apply_update()
+            # exe の場合はプロセスを終了（バッチファイルが再起動する）
+            from PySide6.QtWidgets import QApplication
+            QApplication.instance().quit()
+

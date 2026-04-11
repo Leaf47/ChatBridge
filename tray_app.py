@@ -14,6 +14,7 @@ import pystray
 from pystray import MenuItem as Item
 
 from i18n import t
+from version import __version__
 
 
 # アイコンファイルのパス
@@ -91,12 +92,14 @@ class TrayApp:
         on_toggle_pause: Callable,
         on_quit: Callable,
         on_engine_change: Callable,
+        on_check_update: Callable,
         current_engine: str = "mymemory",
     ):
         self._on_settings = on_settings
         self._on_toggle_pause = on_toggle_pause
         self._on_quit = on_quit
         self._on_engine_change = on_engine_change
+        self._on_check_update = on_check_update
         self._current_engine = current_engine
         self._paused = False
         self._icon: Optional[pystray.Icon] = None
@@ -162,6 +165,13 @@ class TrayApp:
                 self._handle_toggle_pause,
             ),
             pystray.Menu.SEPARATOR,
+            Item(t("tray_check_update"), self._handle_check_update),
+            Item(
+                t("tray_version", version=__version__),
+                lambda: None,
+                enabled=False,
+            ),
+            pystray.Menu.SEPARATOR,
             Item(t("tray_quit"), self._handle_quit),
         )
 
@@ -187,6 +197,10 @@ class TrayApp:
         if self._icon:
             self._icon.menu = self._create_menu()
             self._icon.update_menu()
+
+    def _handle_check_update(self, icon=None, item=None) -> None:
+        """アップデート確認を実行する"""
+        self._on_check_update()
 
     def _handle_quit(self, icon=None, item=None) -> None:
         """アプリを終了する"""

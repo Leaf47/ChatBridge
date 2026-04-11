@@ -25,6 +25,8 @@ from tray_app import TrayApp
 
 # プラットフォーム抽象化レイヤー
 from native import get_platform
+from updater import AutoUpdater
+from version import __version__
 
 
 class UIBridge(QObject):
@@ -96,8 +98,19 @@ class ChatBridgeApp:
             on_toggle_pause=self._on_toggle_pause,
             on_quit=self._quit,
             on_engine_change=self._on_engine_change_from_tray,
+            on_check_update=self._on_check_update_from_tray,
             current_engine=self._config.get("translator", "mymemory"),
         )
+
+        # 自動アップデート
+        self._updater = AutoUpdater()
+        self._settings_window.set_updater(self._updater)
+        self._manual_update_check = False  # 手動チェックフラグ
+        # トレイからのアップデート確認用にシグナルを接続
+        self._updater.update_found.connect(self._on_update_found_from_bg)
+        self._updater.update_not_found.connect(self._on_update_not_found_from_bg)
+        self._updater.update_error.connect(self._on_update_error_from_bg)
+        self._bridge.quit_signal.connect(self._updater.stop_periodic_check)
 
     def _create_translator(self):
         """設定に基づいて翻訳エンジンを作成する"""
@@ -117,6 +130,10 @@ class ChatBridgeApp:
         # 初回起動時に自動起動登録ダイアログを表示
         if self._config.is_first_launch:
             QTimer.singleShot(500, self._show_first_launch_dialog)
+
+        # 自動アップデートチェックを開始（設定で有効な場合）
+        if self._config.get("auto_update_check", True):
+            self._updater.start_periodic_check()
 
         # Ctrl+C (SIGINT) で終了できるようにする
         signal.signal(signal.SIGINT, lambda *args: self._quit())
@@ -247,6 +264,13 @@ class ChatBridgeApp:
         # トレイのエンジン表示を更新
         self._tray.update_engine(self._config.get("translator", "mymemory"))
 
+        # 自動アップデートチェック設定を反映
+        if self._config.get("auto_update_check", True):
+            if not self._updater._timer:
+                self._updater.start_periodic_check()
+        else:
+            self._updater.stop_periodic_check()
+
         print(t("settings_updated", engine=self._translator.name()))
 
     def _on_toggle_pause(self, paused: bool) -> None:
@@ -261,6 +285,56 @@ class ChatBridgeApp:
         self._config.save()
         self._translator = self._create_translator()
         print(t("engine_changed", engine=self._translator.name()))
+
+    def _on_check_update_from_tray(self) -> None:
+        """トレイメニューからアップデート確認が実行されたとき"""
+        # 手動チェックフラグを立てて、結果ダイアログを表示する
+        self._manual_update_check = True
+        self._updater.check_for_update()
+
+    def _on_update_found_from_bg(self, info) -> None:
+        """バックグラウンドチェックまたはトレイから新バージョンが見つかったとき"""
+        self._manual_update_check = False  # フラグリセット
+        msg = QMessageBox()
+        msg.setWindowTitle(t("update_confirm_title"))
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText(t("update_confirm_text", current=__version__, latest=info.version))
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+
+        update_btn = msg.addButton(
+            t("update_confirm_yes"), QMessageBox.ButtonRole.AcceptRole
+        )
+        later_btn = msg.addButton(
+            t("update_confirm_no"), QMessageBox.ButtonRole.RejectRole
+        )
+        msg.setDefaultButton(update_btn)
+
+        msg.exec()
+
+        if msg.clickedButton() == update_btn:
+            self._updater.download_and_apply()
+
+    def _on_update_not_found_from_bg(self) -> None:
+        """最新版を使用中のとき（手動チェック時のみダイアログ表示）"""
+        if getattr(self, '_manual_update_check', False):
+            self._manual_update_check = False
+            msg = QMessageBox()
+            msg.setWindowTitle("ChatBridge")
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setText(t("update_latest"))
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            msg.exec()
+
+    def _on_update_error_from_bg(self, error: str) -> None:
+        """エラー発生時（手動チェック時のみダイアログ表示）"""
+        if getattr(self, '_manual_update_check', False):
+            self._manual_update_check = False
+            msg = QMessageBox()
+            msg.setWindowTitle("ChatBridge")
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setText(t("update_error", error=error))
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            msg.exec()
 
     def _quit(self) -> None:
         """アプリケーションを終了する（どのスレッドからも呼べる）"""

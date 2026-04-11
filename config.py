@@ -58,6 +58,12 @@ DEFAULT_CONFIG = {
         "deepl": "",
         "google": "",
     },
+
+    # 自動アップデートチェック（6時間ごと）
+    "auto_update_check": True,
+
+    # 最終アップデート確認日時（ISO 8601 形式）
+    "last_update_check": "",
 }
 
 

@@ -117,6 +117,38 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "overlay_confirm": "Enter: 確定",
         "overlay_cancel": "Esc: キャンセル",
 
+        # --- トレイメニュー（バージョン・アップデート） ---
+        "tray_check_update": "🔃 アップデートを確認",
+        "tray_version": "ℹ️ ChatBridge v{version}",
+
+        # --- About タブ ---
+        "tab_about": "ℹ️ About",
+        "about_version": "バージョン",
+        "about_license": "ライセンス",
+        "about_links_group": "🔗 リンク",
+        "about_github": "GitHub",
+        "about_report_bug": "バグ報告",
+
+        # --- アップデート ---
+        "update_group": "🔃 アップデート",
+        "update_check_btn": "🔍 アップデートを確認",
+        "update_checking": "確認中...",
+        "update_available": "🆕 新しいバージョンがあります: v{version}",
+        "update_latest": "✅ 最新版を使用中です",
+        "update_download_btn": "⬇️ ダウンロードしてアップデート",
+        "update_downloading": "ダウンロード中... {progress}%",
+        "update_applying": "アップデートを適用しています...",
+        "update_error": "⚠️ アップデートの確認に失敗しました: {error}",
+        "update_auto_check": "自動アップデートチェック（6時間ごと）",
+        "update_last_check": "最終確認: {time}",
+        "update_never_checked": "最終確認: まだ確認していません",
+        "update_confirm_title": "アップデート確認",
+        "update_confirm_text": "新しいバージョンが利用可能です。\n\n現在: v{current}\n最新: v{latest}\n\nダウンロードしてアップデートしますか？",
+        "update_confirm_yes": "⬇️ アップデートする",
+        "update_confirm_no": "後で",
+        "update_restart_text": "アップデートのダウンロードが完了しました。\nアプリを再起動してアップデートを適用します。",
+        "update_dev_notice": "開発環境では自動アップデートは無効です。",
+
         # --- 言語名（ドロップダウン用） ---
         "lang_ja": "日本語",
         "lang_en": "英語",
@@ -231,6 +263,38 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "overlay_loading": "Translating...",
         "overlay_confirm": "Enter: Confirm",
         "overlay_cancel": "Esc: Cancel",
+
+        # --- Tray Menu (Version / Update) ---
+        "tray_check_update": "🔃 Check for Updates",
+        "tray_version": "ℹ️ ChatBridge v{version}",
+
+        # --- About Tab ---
+        "tab_about": "ℹ️ About",
+        "about_version": "Version",
+        "about_license": "License",
+        "about_links_group": "🔗 Links",
+        "about_github": "GitHub",
+        "about_report_bug": "Report Bug",
+
+        # --- Update ---
+        "update_group": "🔃 Update",
+        "update_check_btn": "🔍 Check for Updates",
+        "update_checking": "Checking...",
+        "update_available": "🆕 New version available: v{version}",
+        "update_latest": "✅ You are using the latest version",
+        "update_download_btn": "⬇️ Download & Update",
+        "update_downloading": "Downloading... {progress}%",
+        "update_applying": "Applying update...",
+        "update_error": "⚠️ Update check failed: {error}",
+        "update_auto_check": "Automatic update check (every 6 hours)",
+        "update_last_check": "Last check: {time}",
+        "update_never_checked": "Last check: Never",
+        "update_confirm_title": "Update Available",
+        "update_confirm_text": "A new version is available.\n\nCurrent: v{current}\nLatest: v{latest}\n\nDownload and update?",
+        "update_confirm_yes": "⬇️ Update",
+        "update_confirm_no": "Later",
+        "update_restart_text": "Update downloaded successfully.\nThe app will restart to apply the update.",
+        "update_dev_notice": "Auto-update is disabled in development mode.",
 
         # --- Language Names (for dropdowns) ---
         "lang_ja": "Japanese",
