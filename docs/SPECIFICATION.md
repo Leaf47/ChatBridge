@@ -1,7 +1,7 @@
 # ChatBridge 仕様書
 
-バージョン: 1.1.0
-最終更新日: 2026-04-13
+バージョン: 2.0.0 [Unreleased]
+最終更新日: 2026-04-14
 
 ---
 
@@ -9,6 +9,8 @@
 
 ChatBridge は、ゲーム中のチャットをリアルタイムで翻訳するための Windows デスクトップアプリケーションである。
 ホットキーを押すだけで入力中のテキストを翻訳し、ゲーム画面上にオーバーレイ表示した後、そのままペーストできる。
+
+v2.0 では、画面上のチャットエリアを OCR で読み取り、受信メッセージもリアルタイムに翻訳する機能を追加した。
 
 ### 1.1 対象環境
 
@@ -124,10 +126,21 @@ PySide6 ベースのダークテーマ設定ウィンドウ。
   "lang_selected": true,
   "auto_start": false,
   "mymemory_email": "",
+  "auto_update_check": true,
   "api_keys": {
     "deepl": "",
     "google": ""
-  }
+  },
+  "capture_region": null,
+  "capture_interval": 2.0,
+  "capture_enabled": false,
+  "ocr_engine": "tesseract",
+  "recv_source_lang": null,
+  "recv_target_lang": null,
+  "recv_overlay_geometry": null,
+  "recv_overlay_opacity": 0.85,
+  "recv_auto_hide": true,
+  "recv_target_app": ""
 }
 ```
 
@@ -191,6 +204,80 @@ GitHub Releases API を利用した自動アップデート機能。ポータブ
 | `update_ready()` | 適用準備完了 |
 
 > ⚠️ **注意**: `apply_update()` は exe 実行時のみ動作する。開発時（`python main.py`）はダウンロードまでは動くが、実際の置き換えは行わない。
+
+### 2.10 受信翻訳（OCR 画面翻訳）
+
+> ⚠️ **注意**: この機能は v2.0 で追加予定。実装済だが、ゲーム画面での OCR 精度検証・実機テストが未完了のため、未リリース。
+
+画面上の指定エリアを定期的にキャプチャし、OCR でテキストを認識・翻訳する。
+送信翻訳が「自分の入力を翻訳」するのに対し、受信翻訳は「相手のメッセージを翻訳」する。
+
+#### 受信翻訳パイプライン
+
+```
+CaptureService（キャプチャスレッド）
+  │
+  ├── 1. ScreenCapture.grab(region)
+  │     └── DXcam (DXGI Desktop Duplication) で画面キャプチャ
+  │
+  ├── 2. TesseractOCR.recognize(frame, lang)
+  │     └── 前処理: グレースケール → CLAHE → 二値化 → ノイズ除去
+  │
+  ├── 3. ChatDetector.detect_new_messages(text)
+  │     └── SequenceMatcher で前回との差分を検出
+  │     └── 初回は全行スキップ（起動直後の翻訳ラッシュ防止）
+  │
+  ├── 4. Translator.translate(msg, source, target)
+  │     └── 受信翻訳は送信翻訳と逆方向（相手の言語 → 自分の言語）
+  │
+  └── 5. Signal emission
+        ├── new_translation  → ReceivedTranslationOverlay.add_message
+        ├── activity_update  → ReceivedTranslationOverlay.update_status
+        └── error_occurred   → QMessageBox（ダイアログ表示）
+```
+
+#### エリア指定 UI
+
+| 項目 | 内容 |
+|---|---|
+| 方式 | 半透明オーバーレイ上でドラッグして矩形を指定 |
+| 保存 | `capture_region` として [left, top, right, bottom] で config に保存 |
+| キャンセル | Esc キーまたは右クリック |
+
+#### 受信翻訳オーバーレイ
+
+| 項目 | 内容 |
+|---|---|
+| 表示形式 | 時系列のメッセージリスト（新しいメッセージが下に追加） |
+| ステータスバー | パイプラインの動作状態をリアルタイム表示 |
+| 不透明度 | 設定画面で調整可能（デフォルト: 0.85） |
+| 位置・サイズ | ドラッグで移動可能、位置は config に保存 |
+| フォーカス | ゲームのフォーカスを奪わない |
+
+#### 自動非表示
+
+| 項目 | 内容 |
+|---|---|
+| `recv_auto_hide` | 特定のアプリがアクティブな時のみオーバーレイを表示 |
+| `recv_target_app` | 監視対象アプリのウィンドウタイトル |
+| 自動検出 | 受信翻訳開始時にフォアグラウンドアプリを自動検出 |
+| 手動変更 | 設定画面でアプリ名を手動入力可能 |
+
+#### 言語方向
+
+受信翻訳は**送信翻訳と逆方向**がデフォルト。
+
+| 送信翻訳の設定 | 受信翻訳のデフォルト |
+|---|---|
+| `source_lang: ja`, `target_lang: en` | 英→日 |
+| `source_lang: ja`, `target_lang: zh` | 中→日 |
+
+`recv_source_lang` / `recv_target_lang` を明示的に設定すれば、
+送信翻訳とは独立した言語方向にカスタマイズ可能。
+
+> ⚠️ **既知のバグ（修正済）**: `recv_source_lang` / `recv_target_lang` が `null` として config に保存されている場合、
+> `Config.get()` がデフォルト値を返さず `None` が翻訳 API に渡されて失敗する。
+> `_get_recv_langs()` メソッドで明示的に `None` チェックとフォールバックを行うよう修正した。
 
 ---
 
@@ -260,10 +347,12 @@ main() 開始
 | トレイスレッド | システムトレイアイコン | pystray |
 | 翻訳スレッド | API 呼び出し（ホットキースレッドから直接実行） | requests |
 | アップデートスレッド | バージョンチェック・ダウンロード（都度 daemon Thread 生成） | threading |
+| キャプチャスレッド | 受信翻訳パイプライン（OCR + 翻訳ループ） | threading |
 
 **スレッド間通信:**
 `UIBridge`（QObject）のシグナルを介して、ホットキースレッドからメインスレッドへ安全にUI操作をディスパッチ。
 `AutoUpdater`（QObject）のシグナルを介して、アップデートスレッドからメインスレッドへ結果を通知。
+`CaptureService`（QObject）のシグナルを介して、キャプチャスレッドからメインスレッドへ翻訳結果・ステータスを通知。
 
 ```python
 class UIBridge(QObject):
@@ -381,9 +470,13 @@ ChatBridge/
 ├── requirements.txt     # Python 依存パッケージ
 ├── README.md            # 日本語ドキュメント
 ├── README_EN.md         # 英語ドキュメント
-├── ROADMAP.md           # 開発ロードマップ
 ├── LICENSE              # MIT ライセンス
-└── SPEC.md              # 本仕様書
+└── docs/                # ドキュメント
+    ├── SPECIFICATION.md     # 本仕様書
+    ├── ROADMAP.md           # 開発ロードマップ
+    ├── ARCHITECTURE.md      # アーキテクチャ
+    ├── TROUBLESHOOTING.md   # トラブルシューティング
+    └── DEVELOPMENT_LOG.md   # 開発ログ
 ```
 
 ---
@@ -427,6 +520,10 @@ pyinstaller ChatBridge.spec
 | pyperclip | ≥1.8.2 | クリップボード操作 |
 | requests | ≥2.31.0 | HTTP 通信（翻訳 API） |
 | deepl | ≥1.16.0 | DeepL API クライアント（将来用） |
+| dxcam | ≥0.3.0 | 画面キャプチャ（DXGI Desktop Duplication） |
+| pytesseract | ≥0.3.13 | Tesseract OCR の Python バインディング |
+| opencv-python-headless | ≥4.8.0 | 画像前処理（グレースケール、二値化、ノイズ除去） |
+| numpy | ≥1.24.0 | 数値計算（OpenCV / DXcam 依存） |
 
 ---
 

@@ -122,8 +122,7 @@ class ReceivedTranslationOverlay(QWidget):
         )
         self._scroll_area.setStyleSheet(
             "QScrollArea { background-color: rgba(31, 41, 55, 200);"
-            "border: none; border-bottom-left-radius: 8px;"
-            "border-bottom-right-radius: 8px; }"
+            "border: none; }"
             "QScrollBar:vertical { width: 6px; background: transparent; }"
             "QScrollBar::handle:vertical {"
             "background: rgba(107, 114, 128, 150); border-radius: 3px; }"
@@ -139,10 +138,24 @@ class ReceivedTranslationOverlay(QWidget):
 
         self._scroll_area.setWidget(self._messages_container)
 
+        # ステータスバー（パイプラインの状態をリアルタイム表示）
+        self._status_bar = QLabel("")
+        self._status_bar.setFixedHeight(20)
+        self._status_bar.setStyleSheet(
+            "color: #6b7280; font-size: 10px;"
+            "font-family: 'Segoe UI', 'Yu Gothic UI', sans-serif;"
+            "background-color: rgba(17, 24, 39, 200);"
+            "padding: 2px 8px;"
+            "border-bottom-left-radius: 8px;"
+            "border-bottom-right-radius: 8px;"
+        )
+
         # 初期状態では待機ラベルを表示、スクロールエリアを非表示
         main_layout.addWidget(self._waiting_label)
         main_layout.addWidget(self._scroll_area)
+        main_layout.addWidget(self._status_bar)
         self._scroll_area.hide()
+        self._status_bar.hide()
 
         # サイズ変更グリップ（右下角）
         self._size_grip = QSizeGrip(self)
@@ -339,6 +352,12 @@ class ReceivedTranslationOverlay(QWidget):
         # 待機ラベルに戻す
         self._waiting_label.show()
         self._scroll_area.hide()
+
+    def update_status(self, status_text: str) -> None:
+        """ステータスバーのテキストを更新する"""
+        self._status_bar.setText(status_text)
+        if not self._status_bar.isVisible():
+            self._status_bar.show()
 
     def update_settings(self, opacity: float = None) -> None:
         """表示設定を更新する"""

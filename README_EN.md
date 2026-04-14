@@ -36,9 +36,9 @@ That's why I built ChatBridge.
 
 Under the hood, it's simple: when you press the hotkey, it sends `Ctrl+A` → `Ctrl+C` to grab the chat text, translates it via the MyMemory API, and pastes the result with `Ctrl+V`. That's it.
 
-> 📖 [Technical details (Specification)](SPEC.md)
+> 📖 [Technical details (Specification)](docs/SPECIFICATION.md)
 >
-> 🗺️ [Development Roadmap](ROADMAP.md)
+> 🗺️ [Development Roadmap](docs/ROADMAP.md)
 
 ## 📥 Download
 

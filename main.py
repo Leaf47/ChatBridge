@@ -132,6 +132,9 @@ class ChatBridgeApp:
         self._capture_service.error_occurred.connect(
             self._on_capture_error
         )
+        self._capture_service.activity_update.connect(
+            self._recv_overlay.update_status
+        )
 
     def _create_translator(self):
         """設定に基づいて翻訳エンジンを作成する"""
