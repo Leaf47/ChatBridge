@@ -179,17 +179,27 @@ class ReceivedTranslationOverlay(QWidget):
 
     # --- フォアグラウンドウィンドウ監視（自動表示/非表示） ---
 
-    def start_auto_hide(self, target_hwnd=None) -> None:
+    def start_auto_hide(self, target_title: str = "") -> str:
         """
         フォアグラウンドウィンドウの監視を開始する。
 
-        ターゲットウィンドウがアクティブでない間はオーバーレイを隠す。
-        target_hwnd を指定しない場合は、開始時のフォアグラウンドウィンドウを使う。
+        target_title が空の場合、現在のフォアグラウンドウィンドウのタイトルを
+        自動検出して使用する。
+
+        Returns:
+            検出/使用されたターゲットアプリのウィンドウタイトル
         """
         import ctypes
-        if target_hwnd is None:
-            target_hwnd = ctypes.windll.user32.GetForegroundWindow()
-        self._target_hwnd = target_hwnd
+
+        if not target_title:
+            # フォアグラウンドウィンドウのタイトルを取得
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd) + 1
+            buf = ctypes.create_unicode_buffer(length)
+            ctypes.windll.user32.GetWindowTextW(hwnd, buf, length)
+            target_title = buf.value
+
+        self._target_title = target_title
         self._should_be_visible = True
 
         # 1秒ごとにフォアグラウンドウィンドウをチェック
@@ -197,6 +207,8 @@ class ReceivedTranslationOverlay(QWidget):
             self._auto_hide_timer = QTimer(self)
             self._auto_hide_timer.timeout.connect(self._check_foreground)
         self._auto_hide_timer.start(1000)
+
+        return target_title
 
     def stop_auto_hide(self) -> None:
         """フォアグラウンドウィンドウの監視を停止する"""
@@ -210,13 +222,19 @@ class ReceivedTranslationOverlay(QWidget):
             return
 
         import ctypes
-        current_hwnd = ctypes.windll.user32.GetForegroundWindow()
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
 
-        # ターゲットウィンドウまたはオーバーレイ自身がフォアグラウンドならOK
-        overlay_hwnd = int(self.winId())
+        # フォアグラウンドウィンドウのタイトルを取得
+        length = ctypes.windll.user32.GetWindowTextLengthW(hwnd) + 1
+        buf = ctypes.create_unicode_buffer(length)
+        ctypes.windll.user32.GetWindowTextW(hwnd, buf, length)
+        current_title = buf.value
+
+        # ターゲットアプリまたはオーバーレイ自身がフォアグラウンドならOK
         is_target_active = (
-            current_hwnd == self._target_hwnd
-            or current_hwnd == overlay_hwnd
+            self._target_title in current_title
+            or current_title in self._target_title
+            or hwnd == int(self.winId())
         )
 
         if is_target_active and not self.isVisible():

@@ -180,6 +180,12 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "recv_overlay_clear": "メッセージをクリア",
         "recv_overlay_waiting": "📡 メッセージを待機中...",
         "recv_area_preview": "👁 エリアを確認する",
+        "recv_auto_hide": "特定のアプリがアクティブな時のみ表示する",
+        "recv_auto_hide_hint": "※ 受信翻訳開始時のフォアグラウンドアプリを自動検出します",
+        "recv_target_app_label": "監視対象アプリ:",
+        "recv_target_app_detected": "✅ {name}",
+        "recv_target_app_none": "— 未検出（受信翻訳開始時に自動検出）",
+        "recv_target_app_hint": "※ アプリ名を手動で変更することもできます",
 
         # トレイメニュー — 受信翻訳
         "tray_recv_start": "📖 受信翻訳: 開始",
@@ -355,6 +361,12 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "recv_overlay_clear": "Clear messages",
         "recv_overlay_waiting": "📡 Waiting for messages...",
         "recv_area_preview": "👁 Preview Area",
+        "recv_auto_hide": "Show only when target app is active",
+        "recv_auto_hide_hint": "* Auto-detects the foreground app when capture starts",
+        "recv_target_app_label": "Target App:",
+        "recv_target_app_detected": "✅ {name}",
+        "recv_target_app_none": "— Not detected (auto-detected when capture starts)",
+        "recv_target_app_hint": "* You can also change the app name manually",
 
         # Tray Menu — Received Translation
         "tray_recv_start": "📖 Received Translation: Start",

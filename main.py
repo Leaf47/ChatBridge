@@ -408,9 +408,16 @@ class ChatBridgeApp:
         # オーバーレイを待機状態で即時表示
         self._recv_overlay.show_waiting()
 
-        # フォアグラウンドウィンドウの監視を開始
-        # （ゲームが非アクティブ時にオーバーレイを自動で隠す）
-        self._recv_overlay.start_auto_hide()
+        # 自動非表示が有効な場合のみフォアグラウンド監視を開始
+        if self._config.get("recv_auto_hide", True):
+            target_app = self._config.get("recv_target_app", "")
+            detected = self._recv_overlay.start_auto_hide(target_app)
+
+            # 自動検出されたアプリ名を設定に保存（次回以降の参考用）
+            if not target_app and detected:
+                self._config.set("recv_target_app", detected)
+                self._config.save()
+                print(f"ChatBridge: 監視対象アプリ: {detected}")
 
         self._capture_service.start(region)
 

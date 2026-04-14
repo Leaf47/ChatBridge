@@ -595,6 +595,50 @@ class SettingsWindow(QWidget):
 
         layout.addWidget(interval_group)
 
+        # オーバーレイ表示設定グループ
+        overlay_group = QGroupBox("🖥️ " + t("recv_overlay_title"))
+        overlay_layout = QVBoxLayout(overlay_group)
+        overlay_layout.setSpacing(6)
+
+        # 自動非表示チェックボックス
+        self._recv_auto_hide_check = QCheckBox(t("recv_auto_hide"))
+        self._recv_auto_hide_check.toggled.connect(
+            lambda checked: self._recv_target_app_input.setEnabled(checked)
+        )
+        overlay_layout.addWidget(self._recv_auto_hide_check)
+
+        auto_hide_hint = QLabel(t("recv_auto_hide_hint"))
+        auto_hide_hint.setStyleSheet(
+            "color: #6b7280; font-size: 11px; padding: 0 0 4px 20px;"
+        )
+        auto_hide_hint.setWordWrap(True)
+        overlay_layout.addWidget(auto_hide_hint)
+
+        # ターゲットアプリ名
+        target_widget = QWidget()
+        target_hlayout = QHBoxLayout(target_widget)
+        target_hlayout.setContentsMargins(20, 0, 0, 0)
+
+        target_label = QLabel(t("recv_target_app_label"))
+        target_label.setStyleSheet("font-size: 12px;")
+        target_hlayout.addWidget(target_label)
+
+        self._recv_target_app_input = QLineEdit()
+        self._recv_target_app_input.setPlaceholderText("Genshin Impact")
+        self._recv_target_app_input.setStyleSheet("font-size: 12px;")
+        target_hlayout.addWidget(self._recv_target_app_input)
+
+        overlay_layout.addWidget(target_widget)
+
+        target_hint = QLabel(t("recv_target_app_hint"))
+        target_hint.setStyleSheet(
+            "color: #6b7280; font-size: 11px; padding: 0 0 0 20px;"
+        )
+        target_hint.setWordWrap(True)
+        overlay_layout.addWidget(target_hint)
+
+        layout.addWidget(overlay_group)
+
         layout.addStretch()
 
         scroll.setWidget(tab)
@@ -800,6 +844,16 @@ class SettingsWindow(QWidget):
                 "color: #9ca3af; font-size: 11px; padding: 4px 0;"
             )
 
+        # 自動非表示設定
+        self._recv_auto_hide_check.setChecked(
+            self._config.get("recv_auto_hide", True)
+        )
+        target_app = self._config.get("recv_target_app", "")
+        self._recv_target_app_input.setText(target_app)
+        self._recv_target_app_input.setEnabled(
+            self._recv_auto_hide_check.isChecked()
+        )
+
     def _save_settings(self) -> None:
         """UIの値を設定ファイルに保存する"""
         # ホットキー
@@ -862,6 +916,8 @@ class SettingsWindow(QWidget):
             "capture_interval",
             self._recv_interval_slider.value() / 10.0,
         )
+        self._config.set("recv_auto_hide", self._recv_auto_hide_check.isChecked())
+        self._config.set("recv_target_app", self._recv_target_app_input.text().strip())
 
         # 保存
         self._config.save()

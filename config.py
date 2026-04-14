@@ -87,6 +87,11 @@ DEFAULT_CONFIG = {
     # 受信翻訳オーバーレイの位置・サイズ（None = デフォルト自動配置）
     "recv_overlay_geometry": None,  # [x, y, width, height]
     "recv_overlay_opacity": 0.85,
+
+    # 特定のアプリがアクティブな時のみオーバーレイを表示する
+    "recv_auto_hide": True,
+    # 監視対象アプリのウィンドウタイトル（自動検出、手動変更可）
+    "recv_target_app": "",
 }
 
 
