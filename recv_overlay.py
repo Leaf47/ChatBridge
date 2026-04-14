@@ -9,13 +9,14 @@
   - 端をドラッグしてサイズ変更可能
   - 翻訳結果を時系列でスクロール表示
   - 半透明ダークテーマ
+  - ターゲットウィンドウが非アクティブ時は自動で隠す
 """
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QPushButton, QSizeGrip,
 )
-from PySide6.QtCore import Qt, Signal, QPoint, QSize
+from PySide6.QtCore import Qt, Signal, QPoint, QSize, QTimer
 from PySide6.QtGui import QFont, QColor, QPainter, QCursor
 
 from i18n import t
@@ -32,6 +33,9 @@ class ReceivedTranslationOverlay(QWidget):
         self._opacity = opacity
         self._drag_pos: QPoint | None = None
         self._messages: list[tuple[str, str]] = []  # (原文, 翻訳文)
+        self._target_hwnd = None  # 監視対象のウィンドウハンドル
+        self._auto_hide_timer: QTimer | None = None
+        self._should_be_visible = False  # サービスから見た表示要求
 
         self._setup_window()
         self._setup_ui()
@@ -45,7 +49,7 @@ class ReceivedTranslationOverlay(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        # デフォルトサイズ（後で位置は設定画面から調整可能）
+        # デフォルトサイズ
         self.setMinimumSize(250, 120)
         self.resize(400, 300)
 
@@ -67,12 +71,12 @@ class ReceivedTranslationOverlay(QWidget):
         title_layout.setContentsMargins(10, 0, 4, 0)
         title_layout.setSpacing(4)
 
-        title_label = QLabel("📖 " + t("recv_overlay_title"))
-        title_label.setStyleSheet(
+        self._title_label = QLabel("📖 " + t("recv_overlay_title"))
+        self._title_label.setStyleSheet(
             "color: #a78bfa; font-size: 12px; font-weight: bold;"
             "font-family: 'Segoe UI', 'Yu Gothic UI', sans-serif;"
         )
-        title_layout.addWidget(title_label)
+        title_layout.addWidget(self._title_label)
         title_layout.addStretch()
 
         # クリアボタン
@@ -100,6 +104,16 @@ class ReceivedTranslationOverlay(QWidget):
 
         main_layout.addWidget(self._title_bar)
 
+        # 待機中ラベル（メッセージがない時に表示）
+        self._waiting_label = QLabel(t("recv_overlay_waiting"))
+        self._waiting_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._waiting_label.setStyleSheet(
+            "color: #6b7280; font-size: 12px;"
+            "font-family: 'Segoe UI', 'Yu Gothic UI', sans-serif;"
+            "background-color: rgba(31, 41, 55, 200);"
+            "padding: 20px;"
+        )
+
         # メッセージ表示エリア（スクロール可能）
         self._scroll_area = QScrollArea()
         self._scroll_area.setWidgetResizable(True)
@@ -124,7 +138,11 @@ class ReceivedTranslationOverlay(QWidget):
         self._messages_layout.addStretch()
 
         self._scroll_area.setWidget(self._messages_container)
+
+        # 初期状態では待機ラベルを表示、スクロールエリアを非表示
+        main_layout.addWidget(self._waiting_label)
         main_layout.addWidget(self._scroll_area)
+        self._scroll_area.hide()
 
         # サイズ変更グリップ（右下角）
         self._size_grip = QSizeGrip(self)
@@ -137,8 +155,6 @@ class ReceivedTranslationOverlay(QWidget):
         """背景を描画する"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        # 半透明の背景（描画はスタイルシートに任せるが、不透明度を適用）
         self.setWindowOpacity(self._opacity)
         painter.end()
 
@@ -147,7 +163,6 @@ class ReceivedTranslationOverlay(QWidget):
     def mousePressEvent(self, event) -> None:
         """タイトルバーのドラッグ開始"""
         if event.button() == Qt.MouseButton.LeftButton:
-            # タイトルバー領域のみドラッグ対応
             if event.position().y() <= self._title_bar.height():
                 self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
                 event.accept()
@@ -162,7 +177,61 @@ class ReceivedTranslationOverlay(QWidget):
         """ドラッグ終了"""
         self._drag_pos = None
 
+    # --- フォアグラウンドウィンドウ監視（自動表示/非表示） ---
+
+    def start_auto_hide(self, target_hwnd=None) -> None:
+        """
+        フォアグラウンドウィンドウの監視を開始する。
+
+        ターゲットウィンドウがアクティブでない間はオーバーレイを隠す。
+        target_hwnd を指定しない場合は、開始時のフォアグラウンドウィンドウを使う。
+        """
+        import ctypes
+        if target_hwnd is None:
+            target_hwnd = ctypes.windll.user32.GetForegroundWindow()
+        self._target_hwnd = target_hwnd
+        self._should_be_visible = True
+
+        # 1秒ごとにフォアグラウンドウィンドウをチェック
+        if self._auto_hide_timer is None:
+            self._auto_hide_timer = QTimer(self)
+            self._auto_hide_timer.timeout.connect(self._check_foreground)
+        self._auto_hide_timer.start(1000)
+
+    def stop_auto_hide(self) -> None:
+        """フォアグラウンドウィンドウの監視を停止する"""
+        self._should_be_visible = False
+        if self._auto_hide_timer:
+            self._auto_hide_timer.stop()
+
+    def _check_foreground(self) -> None:
+        """フォアグラウンドウィンドウをチェックし、表示/非表示を切り替える"""
+        if not self._should_be_visible:
+            return
+
+        import ctypes
+        current_hwnd = ctypes.windll.user32.GetForegroundWindow()
+
+        # ターゲットウィンドウまたはオーバーレイ自身がフォアグラウンドならOK
+        overlay_hwnd = int(self.winId())
+        is_target_active = (
+            current_hwnd == self._target_hwnd
+            or current_hwnd == overlay_hwnd
+        )
+
+        if is_target_active and not self.isVisible():
+            self.show()
+        elif not is_target_active and self.isVisible():
+            self.hide()
+
     # --- メッセージ管理 ---
+
+    def show_waiting(self) -> None:
+        """待機状態でオーバーレイを表示する"""
+        self._waiting_label.show()
+        self._scroll_area.hide()
+        self._should_be_visible = True
+        self.show()
 
     def add_message(self, original: str, translated: str) -> None:
         """
@@ -174,10 +243,14 @@ class ReceivedTranslationOverlay(QWidget):
         """
         self._messages.append((original, translated))
 
+        # 待機ラベルを消してメッセージエリアを表示
+        if self._waiting_label.isVisible():
+            self._waiting_label.hide()
+            self._scroll_area.show()
+
         # 最大件数を超えたら古いものを削除
         if len(self._messages) > self.MAX_MESSAGES:
             self._messages.pop(0)
-            # UI からも最初のウィジェットを削除
             item = self._messages_layout.takeAt(0)
             if item and item.widget():
                 item.widget().deleteLater()
@@ -192,8 +265,8 @@ class ReceivedTranslationOverlay(QWidget):
         # 最下部にスクロール
         self._scroll_to_bottom()
 
-        # 非表示なら表示する
-        if not self.isVisible():
+        # 非表示なら表示する（auto_hide が有効でも、メッセージ追加時は表示）
+        if not self.isVisible() and self._should_be_visible:
             self.show()
 
     def _create_message_widget(self, original: str, translated: str) -> QWidget:
@@ -231,7 +304,6 @@ class ReceivedTranslationOverlay(QWidget):
 
     def _scroll_to_bottom(self) -> None:
         """スクロールエリアを最下部に移動する"""
-        from PySide6.QtCore import QTimer
         QTimer.singleShot(50, lambda: (
             self._scroll_area.verticalScrollBar().setValue(
                 self._scroll_area.verticalScrollBar().maximum()
@@ -241,11 +313,14 @@ class ReceivedTranslationOverlay(QWidget):
     def clear_messages(self) -> None:
         """すべてのメッセージをクリアする"""
         self._messages.clear()
-        # レイアウトから stretch 以外のウィジェットを全削除
         while self._messages_layout.count() > 1:
             item = self._messages_layout.takeAt(0)
             if item and item.widget():
                 item.widget().deleteLater()
+
+        # 待機ラベルに戻す
+        self._waiting_label.show()
+        self._scroll_area.hide()
 
     def update_settings(self, opacity: float = None) -> None:
         """表示設定を更新する"""
@@ -256,26 +331,18 @@ class ReceivedTranslationOverlay(QWidget):
     def set_default_position(self, region: tuple[int, int, int, int]) -> None:
         """
         キャプチャエリアに基づいてデフォルト位置を設定する。
-
-        オーバーレイはキャプチャエリアの右側に配置する。
-        画面からはみ出す場合は左側に配置する。
-
-        Args:
-            region: (left, top, right, bottom) — キャプチャ領域
         """
         left, top, right, bottom = region
         screen = self.screen().geometry() if self.screen() else None
 
-        # キャプチャエリアの右側に配置
         overlay_x = right + 10
         overlay_y = top
 
-        # 画面右端からはみ出す場合は左側に配置
         if screen and overlay_x + self.width() > screen.right():
             overlay_x = left - self.width() - 10
 
         self.move(overlay_x, overlay_y)
-        self.resize(400, bottom - top)
+        self.resize(400, max(bottom - top, 120))
 
     def resizeEvent(self, event) -> None:
         """サイズ変更時にグリップ位置を更新する"""

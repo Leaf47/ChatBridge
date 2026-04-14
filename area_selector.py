@@ -1,8 +1,9 @@
 """
 エリア指定オーバーレイ
 
-画面全体を半透明で覆い、ユーザーがマウスドラッグでキャプチャ対象の
-チャットエリアを指定するための UI。
+画面のスクリーンショットを背景に表示し、その上に半透明の暗いオーバーレイを重ねる。
+ユーザーがマウスドラッグでキャプチャ対象のチャットエリアを指定する。
+選択領域部分は暗いオーバーレイが除去され、実際の画面が見える。
 
 操作:
   - マウスドラッグ: 矩形範囲を選択（赤い枠線で表示）
@@ -10,9 +11,12 @@
   - Esc / 右クリック: 選択をキャンセル
 """
 
-from PySide6.QtWidgets import QWidget, QLabel, QApplication
+from PySide6.QtWidgets import QWidget, QApplication
 from PySide6.QtCore import Qt, Signal, QRect, QPoint
-from PySide6.QtGui import QPainter, QColor, QPen, QFont, QCursor
+from PySide6.QtGui import (
+    QPainter, QColor, QPen, QFont, QCursor,
+    QPixmap, QScreen, QRegion,
+)
 
 
 class AreaSelector(QWidget):
@@ -28,18 +32,17 @@ class AreaSelector(QWidget):
         self._start_pos: QPoint | None = None
         self._end_pos: QPoint | None = None
         self._is_dragging = False
+        self._screenshot: QPixmap | None = None  # 背景スクリーンショット
 
         self._setup_window()
 
     def _setup_window(self) -> None:
         """ウィンドウ属性を設定する"""
-        # フルスクリーン半透明オーバーレイ
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setCursor(QCursor(Qt.CursorShape.CrossCursor))
 
         # 全画面に拡張
@@ -52,55 +55,65 @@ class AreaSelector(QWidget):
         self._end_pos = None
         self._is_dragging = False
 
-        # 全画面に再設定（マルチモニター対応）
-        screen = QApplication.primaryScreen().geometry()
-        self.setGeometry(screen)
+        # 表示前に画面全体のスクリーンショットを撮る
+        screen = QApplication.primaryScreen()
+        if screen:
+            self._screenshot = screen.grabWindow(0)
+            self.setGeometry(screen.geometry())
 
         super().showFullScreen()
 
     def paintEvent(self, event) -> None:
-        """オーバーレイと選択領域を描画する"""
+        """スクリーンショット + 暗いオーバーレイ + 選択領域を描画する"""
         painter = QPainter(self)
+        full_rect = self.rect()
 
-        # 半透明の暗いオーバーレイ
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 120))
+        # 1. 背景にスクリーンショットを描画
+        if self._screenshot:
+            painter.drawPixmap(full_rect, self._screenshot)
 
-        # ガイドテキスト
-        painter.setPen(QColor(255, 255, 255, 200))
-        painter.setFont(QFont("Segoe UI", 14))
-        from i18n import t
-        guide_text = t("area_select_guide")
-        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter,
-                         f"\n\n{guide_text}")
-
-        # 選択領域の描画
+        # 2. 選択領域の外側だけ暗いオーバーレイを描画
         if self._start_pos and self._end_pos:
-            rect = self._get_selection_rect()
+            sel_rect = self._get_selection_rect()
 
-            # 選択領域内を明るく表示（暗いオーバーレイを打ち消す）
-            painter.setCompositionMode(
-                QPainter.CompositionMode.CompositionMode_Clear
-            )
-            painter.fillRect(rect, QColor(0, 0, 0, 0))
-            painter.setCompositionMode(
-                QPainter.CompositionMode.CompositionMode_SourceOver
-            )
+            # 選択領域以外を暗くするリージョンを作成
+            outer = QRegion(full_rect)
+            inner = QRegion(sel_rect)
+            dark_region = outer.subtracted(inner)
 
-            # 半透明の青い塗りつぶし
-            painter.fillRect(rect, QColor(59, 130, 246, 40))
+            painter.setClipRegion(dark_region)
+            painter.fillRect(full_rect, QColor(0, 0, 0, 140))
+            painter.setClipping(False)
+
+            # 選択領域に薄い青の半透明を重ねる
+            painter.fillRect(sel_rect, QColor(59, 130, 246, 30))
 
             # 赤い枠線
             pen = QPen(QColor(239, 68, 68), 2, Qt.PenStyle.SolidLine)
             painter.setPen(pen)
-            painter.drawRect(rect)
+            painter.drawRect(sel_rect)
 
             # サイズ表示
-            painter.setPen(QColor(255, 255, 255, 220))
+            painter.setPen(QColor(255, 255, 255, 240))
             painter.setFont(QFont("Segoe UI", 11))
-            size_text = f"{rect.width()} × {rect.height()}"
+            size_text = f"{sel_rect.width()} × {sel_rect.height()}"
             painter.drawText(
-                rect.x(), rect.y() - 6, size_text
+                sel_rect.x(), sel_rect.y() - 6, size_text
             )
+        else:
+            # 選択前: 全体を暗くする
+            painter.fillRect(full_rect, QColor(0, 0, 0, 140))
+
+        # 3. ガイドテキスト（常に表示）
+        painter.setPen(QColor(255, 255, 255, 220))
+        painter.setFont(QFont("Segoe UI", 14))
+        from i18n import t
+        guide_text = t("area_select_guide")
+        painter.drawText(
+            full_rect,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter,
+            f"\n\n{guide_text}",
+        )
 
         painter.end()
 
@@ -112,7 +125,6 @@ class AreaSelector(QWidget):
             self._is_dragging = True
             self.update()
         elif event.button() == Qt.MouseButton.RightButton:
-            # 右クリックでキャンセル
             self._cancel()
 
     def mouseMoveEvent(self, event) -> None:
@@ -136,11 +148,9 @@ class AreaSelector(QWidget):
     def keyPressEvent(self, event) -> None:
         """キー入力の処理"""
         if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
-            # Enter で確定
             if self._start_pos and self._end_pos:
                 self._confirm()
         elif event.key() == Qt.Key.Key_Escape:
-            # Esc でキャンセル
             self._cancel()
 
     def _get_selection_rect(self) -> QRect:
@@ -153,7 +163,6 @@ class AreaSelector(QWidget):
         """選択を確定する"""
         rect = self._get_selection_rect()
         if rect.width() < 10 or rect.height() < 10:
-            # 小さすぎる選択は無視
             return
 
         # グローバル座標に変換

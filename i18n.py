@@ -178,6 +178,8 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         # 受信翻訳オーバーレイ
         "recv_overlay_title": "受信翻訳",
         "recv_overlay_clear": "メッセージをクリア",
+        "recv_overlay_waiting": "📡 メッセージを待機中...",
+        "recv_area_preview": "👁 エリアを確認する",
 
         # トレイメニュー — 受信翻訳
         "tray_recv_start": "📖 受信翻訳: 開始",
@@ -351,6 +353,8 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         # Received Translation Overlay
         "recv_overlay_title": "Received Translations",
         "recv_overlay_clear": "Clear messages",
+        "recv_overlay_waiting": "📡 Waiting for messages...",
+        "recv_area_preview": "👁 Preview Area",
 
         # Tray Menu — Received Translation
         "tray_recv_start": "📖 Received Translation: Start",

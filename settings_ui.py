@@ -545,12 +545,21 @@ class SettingsWindow(QWidget):
         self._recv_area_status.setWordWrap(True)
         area_layout.addWidget(self._recv_area_status)
 
+        # ボタン行（プレビュー）
+        area_btn_layout = QHBoxLayout()
         area_hint = QLabel(t("recv_area_hint"))
         area_hint.setStyleSheet(
             "color: #6b7280; font-size: 11px; padding: 2px 0;"
         )
         area_hint.setWordWrap(True)
-        area_layout.addWidget(area_hint)
+        area_btn_layout.addWidget(area_hint)
+        area_btn_layout.addStretch()
+
+        self._recv_preview_btn = QPushButton(t("recv_area_preview"))
+        self._recv_preview_btn.setStyleSheet("font-size: 11px; padding: 4px 8px;")
+        self._recv_preview_btn.clicked.connect(self._on_preview_area)
+        area_btn_layout.addWidget(self._recv_preview_btn)
+        area_layout.addLayout(area_btn_layout)
 
         layout.addWidget(area_group)
 
@@ -623,6 +632,48 @@ class SettingsWindow(QWidget):
     def _on_area_cancelled(self) -> None:
         """エリア選択がキャンセルされたとき"""
         self.show()
+
+    def _on_preview_area(self) -> None:
+        """設定済みキャプチャエリアを赤い枠線で3秒間プレビュー表示する"""
+        region = self._config.get("capture_region", None)
+        if not region:
+            return
+
+        left, top, right, bottom = region
+        w = right - left
+        h = bottom - top
+
+        # 設定画面を一旦隠す
+        self.hide()
+
+        # プレビュー用の枠線ウィンドウを作成
+        from PySide6.QtCore import QTimer
+
+        self._preview_frame = QWidget()
+        self._preview_frame.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
+        )
+        self._preview_frame.setAttribute(
+            Qt.WidgetAttribute.WA_TranslucentBackground
+        )
+        self._preview_frame.setGeometry(left - 3, top - 3, w + 6, h + 6)
+        self._preview_frame.setStyleSheet(
+            "background-color: transparent;"
+            "border: 3px solid rgba(239, 68, 68, 200);"
+            "border-radius: 4px;"
+        )
+        self._preview_frame.show()
+
+        # 3秒後に自動で消えて設定画面を再表示
+        def _close_preview():
+            if hasattr(self, '_preview_frame') and self._preview_frame:
+                self._preview_frame.close()
+                self._preview_frame = None
+            self.show()
+
+        QTimer.singleShot(3000, _close_preview)
 
 
     def _swap_languages(self) -> None:

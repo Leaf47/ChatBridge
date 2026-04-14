@@ -305,11 +305,11 @@ class ChatBridgeApp:
                 self._start_recv_translation(tuple(region))
             elif region and self._capture_service.is_running:
                 # 間隔が変わった可能性があるので再起動
-                self._capture_service.stop()
+                self._stop_recv_translation()
                 self._start_recv_translation(tuple(region))
         else:
             if self._capture_service.is_running:
-                self._capture_service.stop()
+                self._stop_recv_translation()
                 self._tray.update_recv_status(False)
 
         print(t("settings_updated", engine=self._translator.name()))
@@ -405,25 +405,36 @@ class ChatBridgeApp:
             self._recv_overlay.move(x, y)
             self._recv_overlay.resize(w, h)
 
+        # オーバーレイを待機状態で即時表示
+        self._recv_overlay.show_waiting()
+
+        # フォアグラウンドウィンドウの監視を開始
+        # （ゲームが非アクティブ時にオーバーレイを自動で隠す）
+        self._recv_overlay.start_auto_hide()
+
         self._capture_service.start(region)
+
+    def _stop_recv_translation(self) -> None:
+        """受信翻訳を停止する"""
+        self._capture_service.stop()
+        self._recv_overlay.stop_auto_hide()
+        self._recv_overlay.hide()
+        # オーバーレイの位置を保存
+        geom = self._recv_overlay.geometry()
+        self._config.set("recv_overlay_geometry", [
+            geom.x(), geom.y(), geom.width(), geom.height()
+        ])
+        self._config.save()
 
     def _on_toggle_recv_from_tray(self) -> None:
         """トレイメニューから受信翻訳の開始/停止が実行されたとき"""
         if self._capture_service.is_running:
-            self._capture_service.stop()
-            self._recv_overlay.hide()
-            # オーバーレイの位置を保存
-            geom = self._recv_overlay.geometry()
-            self._config.set("recv_overlay_geometry", [
-                geom.x(), geom.y(), geom.width(), geom.height()
-            ])
-            self._config.save()
+            self._stop_recv_translation()
         else:
             region = self._config.get("capture_region", None)
             if region:
                 self._start_recv_translation(tuple(region))
             else:
-                # エリア未設定の場合はダイアログで通知
                 msg = QMessageBox()
                 msg.setWindowTitle("ChatBridge")
                 msg.setIcon(QMessageBox.Icon.Warning)
