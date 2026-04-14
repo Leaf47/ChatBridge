@@ -93,6 +93,7 @@ class TrayApp:
         on_quit: Callable,
         on_engine_change: Callable,
         on_check_update: Callable,
+        on_toggle_recv: Callable = None,
         current_engine: str = "mymemory",
     ):
         self._on_settings = on_settings
@@ -100,8 +101,10 @@ class TrayApp:
         self._on_quit = on_quit
         self._on_engine_change = on_engine_change
         self._on_check_update = on_check_update
+        self._on_toggle_recv = on_toggle_recv
         self._current_engine = current_engine
         self._paused = False
+        self._recv_running = False
         self._icon: Optional[pystray.Icon] = None
         self._thread: Optional[threading.Thread] = None
 
@@ -135,6 +138,21 @@ class TrayApp:
 
     def _create_menu(self) -> pystray.Menu:
         """右クリックメニューを作成する"""
+        # 受信翻訳メニュー項目
+        recv_items = []
+        if self._on_toggle_recv:
+            recv_label = (
+                t("tray_recv_running") if self._recv_running
+                else t("tray_recv_stopped")
+            )
+            recv_items = [
+                pystray.Menu.SEPARATOR,
+                Item(
+                    recv_label,
+                    self._handle_toggle_recv,
+                ),
+            ]
+
         return pystray.Menu(
             Item(t("tray_settings"), self._handle_settings),
             pystray.Menu.SEPARATOR,
@@ -159,6 +177,7 @@ class TrayApp:
                     ),
                 ),
             ),
+            *recv_items,
             pystray.Menu.SEPARATOR,
             Item(
                 lambda text: t("tray_resume") if self._paused else t("tray_pause"),
@@ -201,6 +220,18 @@ class TrayApp:
     def _handle_check_update(self, icon=None, item=None) -> None:
         """アップデート確認を実行する"""
         self._on_check_update()
+
+    def _handle_toggle_recv(self, icon=None, item=None) -> None:
+        """受信翻訳の開始/停止を切り替える"""
+        if self._on_toggle_recv:
+            self._on_toggle_recv()
+
+    def update_recv_status(self, running: bool) -> None:
+        """受信翻訳のステータス表示を更新する"""
+        self._recv_running = running
+        if self._icon:
+            self._icon.menu = self._create_menu()
+            self._icon.update_menu()
 
     def _handle_quit(self, icon=None, item=None) -> None:
         """アプリを終了する"""

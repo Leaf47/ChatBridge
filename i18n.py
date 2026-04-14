@@ -159,6 +159,32 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "lang_es": "スペイン語",
         "lang_pt": "ポルトガル語",
         "lang_ru": "ロシア語",
+
+        # --- 受信翻訳（OCR 画面翻訳）---
+        "tab_recv_translate": "受信翻訳",
+        "recv_group": "📖 受信翻訳（画面OCR）",
+        "recv_enabled": "受信翻訳を有効にする",
+        "recv_interval_label": "キャプチャ間隔:",
+        "recv_interval_hint": "※ 短いと応答性が上がりますが、CPU 負荷が増えます",
+        "recv_interval_sec": "{value} 秒",
+        "recv_area_group": "📏 キャプチャエリア",
+        "recv_area_btn": "🖱️ エリアを指定する",
+        "recv_area_status_set": "✅ エリア設定済み: ({left}, {top}) — ({right}, {bottom})",
+        "recv_area_status_unset": "⚠️ エリアが設定されていません",
+        "recv_area_hint": "※ ゲームのチャットエリアをドラッグで囲んでください",
+        "recv_ocr_not_available": "⚠️ OCR エンジン (Tesseract) が見つかりません。\nインストールしてください。",
+        "area_select_guide": "ドラッグでチャットエリアを選択 | Enter: 確定 | Esc: キャンセル",
+
+        # 受信翻訳オーバーレイ
+        "recv_overlay_title": "受信翻訳",
+        "recv_overlay_clear": "メッセージをクリア",
+
+        # トレイメニュー — 受信翻訳
+        "tray_recv_start": "📖 受信翻訳: 開始",
+        "tray_recv_stop": "📖 受信翻訳: 停止",
+        "tray_recv_running": "📖 受信翻訳: 動作中",
+        "tray_recv_stopped": "📖 受信翻訳: 停止中",
+        "tray_recv_no_area": "⚠️ キャプチャエリアが未設定です。\n設定画面でエリアを指定してください。",
     },
 
     "en": {
@@ -306,6 +332,32 @@ _BUILTIN: Dict[str, Dict[str, str]] = {
         "lang_es": "Spanish",
         "lang_pt": "Portuguese",
         "lang_ru": "Russian",
+
+        # --- Received Translation (OCR Screen Translation) ---
+        "tab_recv_translate": "Receive",
+        "recv_group": "📖 Received Translation (Screen OCR)",
+        "recv_enabled": "Enable received translation",
+        "recv_interval_label": "Capture Interval:",
+        "recv_interval_hint": "* Shorter intervals increase responsiveness but CPU load",
+        "recv_interval_sec": "{value} sec",
+        "recv_area_group": "📏 Capture Area",
+        "recv_area_btn": "🖱️ Select Area",
+        "recv_area_status_set": "✅ Area set: ({left}, {top}) — ({right}, {bottom})",
+        "recv_area_status_unset": "⚠️ Area not set",
+        "recv_area_hint": "* Drag to select the game's chat area",
+        "recv_ocr_not_available": "⚠️ OCR engine (Tesseract) not found.\nPlease install it.",
+        "area_select_guide": "Drag to select chat area  |  Enter: Confirm  |  Esc: Cancel",
+
+        # Received Translation Overlay
+        "recv_overlay_title": "Received Translations",
+        "recv_overlay_clear": "Clear messages",
+
+        # Tray Menu — Received Translation
+        "tray_recv_start": "📖 Received Translation: Start",
+        "tray_recv_stop": "📖 Received Translation: Stop",
+        "tray_recv_running": "📖 Received Translation: Running",
+        "tray_recv_stopped": "📖 Received Translation: Stopped",
+        "tray_recv_no_area": "⚠️ Capture area not set.\nPlease set it in settings.",
     },
 }
 

@@ -64,6 +64,29 @@ DEFAULT_CONFIG = {
 
     # 最終アップデート確認日時（ISO 8601 形式）
     "last_update_check": "",
+
+    # --- 受信翻訳（OCR 画面翻訳）---
+
+    # キャプチャ領域 [left, top, right, bottom]（None = 未設定）
+    "capture_region": None,
+
+    # キャプチャ間隔（秒）
+    "capture_interval": 2.0,
+
+    # 受信翻訳の有効/無効
+    "capture_enabled": False,
+
+    # OCR エンジン（"tesseract" / 将来: "paddleocr" 等）
+    "ocr_engine": "tesseract",
+
+    # 受信翻訳の言語ペア（送信翻訳とは逆方向がデフォルト）
+    # None の場合は送信翻訳の target/source を自動で使用
+    "recv_source_lang": None,
+    "recv_target_lang": None,
+
+    # 受信翻訳オーバーレイの位置・サイズ（None = デフォルト自動配置）
+    "recv_overlay_geometry": None,  # [x, y, width, height]
+    "recv_overlay_opacity": 0.85,
 }
 
 

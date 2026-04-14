@@ -27,6 +27,8 @@ from tray_app import TrayApp
 from native import get_platform
 from updater import AutoUpdater
 from version import __version__
+from capture_service import CaptureService
+from recv_overlay import ReceivedTranslationOverlay
 
 
 class UIBridge(QObject):
@@ -99,6 +101,7 @@ class ChatBridgeApp:
             on_quit=self._quit,
             on_engine_change=self._on_engine_change_from_tray,
             on_check_update=self._on_check_update_from_tray,
+            on_toggle_recv=self._on_toggle_recv_from_tray,
             current_engine=self._config.get("translator", "mymemory"),
         )
 
@@ -111,6 +114,24 @@ class ChatBridgeApp:
         self._updater.update_not_found.connect(self._on_update_not_found_from_bg)
         self._updater.update_error.connect(self._on_update_error_from_bg)
         self._bridge.quit_signal.connect(self._updater.stop_periodic_check)
+
+        # --- 受信翻訳 ---
+        self._recv_overlay = ReceivedTranslationOverlay(
+            opacity=self._config.get("recv_overlay_opacity", 0.85)
+        )
+        self._capture_service = CaptureService(
+            config=self._config,
+            translator_factory=self._create_translator,
+        )
+        self._capture_service.new_translation.connect(
+            self._recv_overlay.add_message
+        )
+        self._capture_service.status_changed.connect(
+            self._on_capture_status_changed
+        )
+        self._capture_service.error_occurred.connect(
+            self._on_capture_error
+        )
 
     def _create_translator(self):
         """設定に基づいて翻訳エンジンを作成する"""
@@ -134,6 +155,12 @@ class ChatBridgeApp:
         # 自動アップデートチェックを開始（設定で有効な場合）
         if self._config.get("auto_update_check", True):
             self._updater.start_periodic_check()
+
+        # 受信翻訳が有効 + エリア設定済みなら自動開始
+        if self._config.get("capture_enabled", False):
+            region = self._config.get("capture_region", None)
+            if region:
+                self._start_recv_translation(tuple(region))
 
         # Ctrl+C (SIGINT) で終了できるようにする
         signal.signal(signal.SIGINT, lambda *args: self._quit())
@@ -271,6 +298,20 @@ class ChatBridgeApp:
         else:
             self._updater.stop_periodic_check()
 
+        # 受信翻訳設定の反映
+        if self._config.get("capture_enabled", False):
+            region = self._config.get("capture_region", None)
+            if region and not self._capture_service.is_running:
+                self._start_recv_translation(tuple(region))
+            elif region and self._capture_service.is_running:
+                # 間隔が変わった可能性があるので再起動
+                self._capture_service.stop()
+                self._start_recv_translation(tuple(region))
+        else:
+            if self._capture_service.is_running:
+                self._capture_service.stop()
+                self._tray.update_recv_status(False)
+
         print(t("settings_updated", engine=self._translator.name()))
 
     def _on_toggle_pause(self, paused: bool) -> None:
@@ -344,9 +385,71 @@ class ChatBridgeApp:
     def _do_quit(self) -> None:
         """実際の終了処理（UIスレッドで実行される）"""
         print(t("shutting_down"))
+        # 受信翻訳を停止
+        if self._capture_service.is_running:
+            self._capture_service.stop()
         self._hotkey_manager.stop()
         self._tray.stop()
         self._app.quit()
+
+    # --- 受信翻訳管理 ---
+
+    def _start_recv_translation(self, region: tuple) -> None:
+        """受信翻訳を開始する"""
+        self._recv_overlay.set_default_position(region)
+
+        # 保存済みのオーバーレイ位置があれば復元
+        saved_geom = self._config.get("recv_overlay_geometry", None)
+        if saved_geom:
+            x, y, w, h = saved_geom
+            self._recv_overlay.move(x, y)
+            self._recv_overlay.resize(w, h)
+
+        self._capture_service.start(region)
+
+    def _on_toggle_recv_from_tray(self) -> None:
+        """トレイメニューから受信翻訳の開始/停止が実行されたとき"""
+        if self._capture_service.is_running:
+            self._capture_service.stop()
+            self._recv_overlay.hide()
+            # オーバーレイの位置を保存
+            geom = self._recv_overlay.geometry()
+            self._config.set("recv_overlay_geometry", [
+                geom.x(), geom.y(), geom.width(), geom.height()
+            ])
+            self._config.save()
+        else:
+            region = self._config.get("capture_region", None)
+            if region:
+                self._start_recv_translation(tuple(region))
+            else:
+                # エリア未設定の場合はダイアログで通知
+                msg = QMessageBox()
+                msg.setWindowTitle("ChatBridge")
+                msg.setIcon(QMessageBox.Icon.Warning)
+                msg.setText(t("tray_recv_no_area"))
+                msg.setWindowFlags(
+                    msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
+                )
+                msg.exec()
+
+    def _on_capture_status_changed(self, status: str) -> None:
+        """キャプチャサービスのステータスが変わったとき"""
+        running = status == "running"
+        self._tray.update_recv_status(running)
+        print(f"ChatBridge: 受信翻訳 {'開始' if running else '停止'}")
+
+    def _on_capture_error(self, error: str) -> None:
+        """キャプチャサービスでエラーが発生したとき"""
+        print(f"ChatBridge: 受信翻訳エラー: {error}")
+        msg = QMessageBox()
+        msg.setWindowTitle("ChatBridge")
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setText(error)
+        msg.setWindowFlags(
+            msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
+        )
+        msg.exec()
 
 
 def main():

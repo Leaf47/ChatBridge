@@ -267,7 +267,7 @@ class SettingsWindow(QWidget):
     def _setup_window(self) -> None:
         """ウィンドウの属性を設定する"""
         self.setWindowTitle(t("settings_title"))
-        self.setFixedSize(480, 680)
+        self.setFixedSize(500, 720)
         self.setWindowFlags(
             Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.WindowCloseButtonHint
@@ -291,6 +291,7 @@ class SettingsWindow(QWidget):
         tabs = QTabWidget()
         tabs.addTab(self._create_general_tab(), t("tab_general"))
         tabs.addTab(self._create_translator_tab(), t("tab_translator"))
+        tabs.addTab(self._create_recv_translate_tab(), t("tab_recv_translate"))
         tabs.addTab(self._create_about_tab(), t("tab_about"))
         main_layout.addWidget(tabs)
 
@@ -505,6 +506,124 @@ class SettingsWindow(QWidget):
         scroll.setWidget(tab)
         return scroll
 
+    def _create_recv_translate_tab(self) -> QWidget:
+        """受信翻訳タブを作成する"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(12)
+
+        # 受信翻訳設定グループ
+        recv_group = QGroupBox(t("recv_group"))
+        recv_layout = QVBoxLayout(recv_group)
+        recv_layout.setSpacing(8)
+
+        # 有効/無効チェックボックス
+        self._recv_enabled_check = QCheckBox(t("recv_enabled"))
+        recv_layout.addWidget(self._recv_enabled_check)
+
+        layout.addWidget(recv_group)
+
+        # キャプチャエリアグループ
+        area_group = QGroupBox(t("recv_area_group"))
+        area_layout = QVBoxLayout(area_group)
+        area_layout.setSpacing(6)
+
+        # エリア指定ボタン
+        self._recv_area_btn = QPushButton(t("recv_area_btn"))
+        self._recv_area_btn.clicked.connect(self._on_select_area)
+        area_layout.addWidget(self._recv_area_btn)
+
+        # エリアステータスラベル
+        self._recv_area_status = QLabel(t("recv_area_status_unset"))
+        self._recv_area_status.setStyleSheet(
+            "color: #9ca3af; font-size: 11px; padding: 4px 0;"
+        )
+        self._recv_area_status.setWordWrap(True)
+        area_layout.addWidget(self._recv_area_status)
+
+        area_hint = QLabel(t("recv_area_hint"))
+        area_hint.setStyleSheet(
+            "color: #6b7280; font-size: 11px; padding: 2px 0;"
+        )
+        area_hint.setWordWrap(True)
+        area_layout.addWidget(area_hint)
+
+        layout.addWidget(area_group)
+
+        # キャプチャ間隔グループ
+        interval_group = QGroupBox(t("recv_interval_label"))
+        interval_layout = QVBoxLayout(interval_group)
+        interval_layout.setSpacing(6)
+
+        interval_widget = QWidget()
+        interval_hlayout = QHBoxLayout(interval_widget)
+        interval_hlayout.setContentsMargins(0, 0, 0, 0)
+
+        self._recv_interval_slider = QSlider(Qt.Orientation.Horizontal)
+        self._recv_interval_slider.setRange(5, 50)  # 0.5秒〜5.0秒（×10）
+        self._recv_interval_slider.setTickInterval(5)
+        self._recv_interval_label = QLabel("2.0 秒")
+        self._recv_interval_slider.valueChanged.connect(
+            lambda v: self._recv_interval_label.setText(
+                t("recv_interval_sec", value=f"{v / 10:.1f}")
+            )
+        )
+        interval_hlayout.addWidget(self._recv_interval_slider)
+        interval_hlayout.addWidget(self._recv_interval_label)
+
+        interval_layout.addWidget(interval_widget)
+
+        interval_hint = QLabel(t("recv_interval_hint"))
+        interval_hint.setStyleSheet(
+            "color: #6b7280; font-size: 11px; padding: 2px 0;"
+        )
+        interval_hint.setWordWrap(True)
+        interval_layout.addWidget(interval_hint)
+
+        layout.addWidget(interval_group)
+
+        layout.addStretch()
+
+        scroll.setWidget(tab)
+        return scroll
+
+    def _on_select_area(self) -> None:
+        """エリア指定ボタンが押されたとき"""
+        from area_selector import AreaSelector
+
+        # 設定ウィンドウを一時的に隠す
+        self.hide()
+
+        self._area_selector = AreaSelector()
+        self._area_selector.area_selected.connect(self._on_area_selected)
+        self._area_selector.cancelled.connect(self._on_area_cancelled)
+        self._area_selector.show()
+
+    def _on_area_selected(self, region: tuple) -> None:
+        """エリアが選択されたとき"""
+        left, top, right, bottom = region
+        self._config.set("capture_region", list(region))
+        self._config.save()
+
+        self._recv_area_status.setText(
+            t("recv_area_status_set",
+              left=left, top=top, right=right, bottom=bottom)
+        )
+        self._recv_area_status.setStyleSheet(
+            "color: #34d399; font-size: 11px; padding: 4px 0;"
+        )
+
+        # 設定ウィンドウを再表示
+        self.show()
+
+    def _on_area_cancelled(self) -> None:
+        """エリア選択がキャンセルされたとき"""
+        self.show()
+
 
     def _swap_languages(self) -> None:
         """翻訳元と翻訳先を入れ替える"""
@@ -601,6 +720,35 @@ class SettingsWindow(QWidget):
         self._deepl_key_input.setText(self._config.get("api_keys.deepl", ""))
         self._google_key_input.setText(self._config.get("api_keys.google", ""))
 
+        # --- 受信翻訳タブ ---
+        self._recv_enabled_check.setChecked(
+            self._config.get("capture_enabled", False)
+        )
+
+        # キャプチャ間隔
+        interval = self._config.get("capture_interval", 2.0)
+        self._recv_interval_slider.setValue(int(interval * 10))
+        self._recv_interval_label.setText(
+            t("recv_interval_sec", value=f"{interval:.1f}")
+        )
+
+        # エリアステータス
+        region = self._config.get("capture_region", None)
+        if region:
+            left, top, right, bottom = region
+            self._recv_area_status.setText(
+                t("recv_area_status_set",
+                  left=left, top=top, right=right, bottom=bottom)
+            )
+            self._recv_area_status.setStyleSheet(
+                "color: #34d399; font-size: 11px; padding: 4px 0;"
+            )
+        else:
+            self._recv_area_status.setText(t("recv_area_status_unset"))
+            self._recv_area_status.setStyleSheet(
+                "color: #9ca3af; font-size: 11px; padding: 4px 0;"
+            )
+
     def _save_settings(self) -> None:
         """UIの値を設定ファイルに保存する"""
         # ホットキー
@@ -656,6 +804,13 @@ class SettingsWindow(QWidget):
 
         # 自動アップデートチェック
         self._config.set("auto_update_check", self._auto_update_check.isChecked())
+
+        # --- 受信翻訳設定 ---
+        self._config.set("capture_enabled", self._recv_enabled_check.isChecked())
+        self._config.set(
+            "capture_interval",
+            self._recv_interval_slider.value() / 10.0,
+        )
 
         # 保存
         self._config.save()
